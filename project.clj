@@ -8,8 +8,8 @@
                       :url  "https://www.eclipse.org/legal/epl-2.0/"}
 
             :dependencies [[org.clojure/clojure "1.12.4"]
-                           [net.clojars.macielti/service "0.1.0"]
-                           [net.clojars.macielti/common-clj "46.1.1"]
+                           [net.clojars.macielti/service "0.3.7"]
+                           [net.clojars.macielti/common-clj "46.2.0"]
                            [io.pedestal/pedestal.service "0.8.1"]
                            [io.pedestal/pedestal.jetty "0.8.1"]
                            [io.pedestal/pedestal.error "0.8.1"]
@@ -29,7 +29,7 @@
 
                              :test-paths     ["test/unit" "test/integration" "test/helpers"]
 
-                             :dependencies   [[net.clojars.macielti/common-test-clj "7.0.1"]
+                             :dependencies   [[net.clojars.macielti/common-test-clj "7.1.1"]
                                               [http-kit.fake/http-kit.fake "0.2.2"]
                                               [nubank/matcher-combinators "3.10.0"]
                                               [hashp "0.2.2"]]
