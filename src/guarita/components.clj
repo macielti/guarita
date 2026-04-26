@@ -11,8 +11,7 @@
 (taoensso.timbre.tools.logging/use-timbre)
 
 (def components
-  (merge {:config (ig/ref ::component.config/config)}
-))
+  {:config (ig/ref ::component.config/config)})
 
 (def arranjo
   (merge
@@ -20,8 +19,7 @@
                                 :env  :prod}}
     {::component.routes/routes {:routes diplomat.http-server/routes}}
     {::component.service/service {:components (merge components
-                                                     {:routes (ig/ref ::component.routes/routes)}
-                                                     )}}))
+                                                     {:routes (ig/ref ::component.routes/routes)})}}))
 
 (defn start-system! []
   (timbre/set-min-level! :debug)
