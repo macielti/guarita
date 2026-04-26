@@ -52,6 +52,7 @@
                                                               "--report-unsupported-elements-at-runtime"
 
                                                               "--initialize-at-build-time"
+                                                              "--initialize-at-run-time=io.prometheus.client.Striped64"
 
                                                               "-H:ReflectionConfigurationFiles=reflect-config.json"
                                                               "--features=clj_easy.graal_build_time.InitClojureClasses"
