@@ -1,0 +1,15 @@
+name: Clojure CI - Linter
+
+on: [ push ]
+
+jobs:
+  linter-check:
+    name: Linter Check
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: lein deps
+      - name: Linter Check
+        run: lein lint
