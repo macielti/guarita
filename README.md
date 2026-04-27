@@ -1,5 +1,8 @@
 # Guarita
 
+A Clojure HTTP service that exposes a fraud-scoring API, built as a submission to the
+[Rinha de Backend 2026](https://github.com/zanfranceschi/rinha-de-backend-2026/tree/main) competition.
+
 ## License
 
 Copyright © 2026 Bruno do Nascimento Maciel
