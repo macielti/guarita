@@ -1,3 +1,10 @@
-{:test {:name    "guarita"
-        :service {:host "0.0.0.0"
-                  :port 8001}}}
+{:test {:name           "guarita"
+        :service       {:host "0.0.0.0"
+                        :port 8001}
+        :normalization {:max-amount              10000
+                        :max-installments        12
+                        :amount-vs-avg-ratio     10
+                        :max-minutes             1440
+                        :max-km                  1000
+                        :max-tx-count-24h        20
+                        :max-merchant-avg-amount 10000}}}
