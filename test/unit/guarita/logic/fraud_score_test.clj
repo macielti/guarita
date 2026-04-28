@@ -3,7 +3,9 @@
             [common-test-clj.helpers.schema :as helpers.schema]
             [guarita.logic.fraud-score :as logic.fraud-score]
             [guarita.models.customer :as models.customer]
+            [guarita.models.merchant :as models.merchant]
             [guarita.models.normalization :as models.normalization]
+            [guarita.models.terminal :as models.terminal]
             [guarita.models.transaction :as models.transaction]
             [matcher-combinators.test :refer [match?]]
             [schema.test :as s])
@@ -26,6 +28,138 @@
   (helpers.schema/generate models.customer/Customer
                            {:avg-amount avg-amount}
                            {}))
+
+;; normalize-hour-of-day test fixtures
+(def hour-midnight 0)
+(def expected-hour-midnight-score 0.0)
+
+(def hour-noon 12)
+(def expected-hour-noon-score (/ 12 23.0))
+
+(def hour-end-of-day 23)
+(def expected-hour-end-of-day-score 1.0)
+
+(def hour-morning 6)
+(def expected-hour-morning-score (/ 6 23.0))
+
+;; normalize-day-of-week test fixtures
+(def day-monday 0)
+(def expected-day-monday-score 0.0)
+
+(def day-saturday 5)
+(def expected-day-saturday-score (/ 5 6.0))
+
+(def day-sunday 6)
+(def expected-day-sunday-score 1.0)
+
+(def day-wednesday 2)
+(def expected-day-wednesday-score (/ 2 6.0))
+
+;; normalize-minutes-since-last-tx test fixtures
+(def max-minutes 60)
+(def minutes-elapsed-30 30)
+(def expected-minutes-30-score 0.5)
+
+(def minutes-elapsed-120 120)
+(def expected-minutes-120-score 1.0)
+
+(def minutes-elapsed-negative -5)
+(def expected-minutes-negative-score 0.0)
+
+;; normalize-km-from-last-tx test fixtures
+(def max-km 100)
+(def km-from-current-50 50)
+(def expected-km-50-score 0.5)
+
+(def km-from-current-200 200)
+(def expected-km-200-score 1.0)
+
+(def km-from-current-0 0)
+(def expected-km-0-score 0.0)
+
+;; normalize-km-from-home test fixtures
+(def km-from-home-0 0)
+(def expected-km-home-0-score 0.0)
+
+(def km-from-home-50 50)
+(def expected-km-home-50-score 0.5)
+
+(def km-from-home-100 100)
+(def expected-km-home-100-score 1.0)
+
+(def km-from-home-200 200)
+(def expected-km-home-200-score 1.0)
+
+;; normalize-tx-count-24h test fixtures
+(def max-tx-count-24h 10)
+(def tx-count-0 0)
+(def expected-tx-count-0-score 0.0)
+
+(def tx-count-5 5)
+(def expected-tx-count-5-score 0.5)
+
+(def tx-count-10 10)
+(def expected-tx-count-10-score 1.0)
+
+(def tx-count-20 20)
+(def expected-tx-count-20-score 1.0)
+
+;; normalize-is-online test fixtures
+(def terminal-online (helpers.schema/generate models.terminal/Terminal
+                                              {:online? true}
+                                              {}))
+
+(def terminal-offline (helpers.schema/generate models.terminal/Terminal
+                                               {:online? false}
+                                               {}))
+
+(def expected-online-score 1)
+(def expected-offline-score 0)
+
+;; normalize-card-present test fixtures
+(def terminal-card-present (helpers.schema/generate models.terminal/Terminal
+                                                    {:card-present? true}
+                                                    {}))
+
+(def terminal-card-not-present (helpers.schema/generate models.terminal/Terminal
+                                                        {:card-present? false}
+                                                        {}))
+
+(def expected-card-present-score 1)
+(def expected-card-not-present-score 0)
+
+;; normalize-unknown-merchant test fixtures
+(def merchant-known "merch-1")
+(def merchant-unknown "merch-9")
+(def known-merchants ["merch-1" "merch-2"])
+(def empty-known-merchants [])
+
+(def customer-with-known-merchants
+  (helpers.schema/generate models.customer/Customer
+                           {:known-merchants known-merchants}
+                           {}))
+
+(def customer-with-empty-known-merchants
+  (helpers.schema/generate models.customer/Customer
+                           {:known-merchants empty-known-merchants}
+                           {}))
+
+(def expected-known-merchant-score 0)
+(def expected-unknown-merchant-score 1)
+
+;; normalize-merchant-avg-amount test fixtures
+(def max-merchant-avg-amount 1000)
+(def merchant-avg-amount-0 0)
+(def expected-merchant-avg-0-score 0.0)
+
+(def merchant-avg-amount-500 500)
+(def expected-merchant-avg-500-score 0.5)
+
+(def merchant-avg-amount-1000 1000)
+(def expected-merchant-avg-1000-score 1.0)
+
+(def merchant-avg-amount-2000 2000)
+(def expected-merchant-avg-2000-score 1.0)
 
 ;; normalize-amount test fixtures
 (def normal-amount 500.0)
@@ -176,3 +310,353 @@
                                                {})
           result (logic.fraud-score/normalize-amount-vs-avg transaction customer normalization)]
       (is (match? expected-boundary-avg-ratio-score result)))))
+
+;; normalize-hour-of-day tests
+(s/deftest normalize-hour-of-day-midnight-test
+  (testing "it should return 0.0 for midnight (hour 0)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-15T00:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-hour-of-day transaction)]
+      (is (match? expected-hour-midnight-score result)))))
+
+(s/deftest normalize-hour-of-day-noon-test
+  (testing "it should return proportional score for noon (hour 12)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-15T12:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-hour-of-day transaction)]
+      (is (match? expected-hour-noon-score result)))))
+
+(s/deftest normalize-hour-of-day-end-of-day-test
+  (testing "it should return 1.0 for end of day (hour 23)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-15T23:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-hour-of-day transaction)]
+      (is (match? expected-hour-end-of-day-score result)))))
+
+(s/deftest normalize-hour-of-day-morning-test
+  (testing "it should return proportional score for morning (hour 6)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-15T06:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-hour-of-day transaction)]
+      (is (match? expected-hour-morning-score result)))))
+
+;; normalize-day-of-week tests
+(s/deftest normalize-day-of-week-monday-test
+  (testing "it should return 0.0 for Monday (day 0)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-17T00:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-day-of-week transaction)]
+      (is (match? expected-day-monday-score result)))))
+
+(s/deftest normalize-day-of-week-saturday-test
+  (testing "it should return proportional score for Saturday (day 5)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-15T00:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-day-of-week transaction)]
+      (is (match? expected-day-saturday-score result)))))
+
+(s/deftest normalize-day-of-week-sunday-test
+  (testing "it should return 1.0 for Sunday (day 6)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-16T00:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-day-of-week transaction)]
+      (is (match? expected-day-sunday-score result)))))
+
+(s/deftest normalize-day-of-week-wednesday-test
+  (testing "it should return proportional score for Wednesday (day 2)"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-19T00:00:00Z")}
+                                               {})
+          result (logic.fraud-score/normalize-day-of-week transaction)]
+      (is (match? expected-day-wednesday-score result)))))
+
+;; normalize-minutes-since-last-tx tests
+(s/deftest normalize-minutes-since-last-tx-nil-test
+  (testing "it should return -1 when last-transaction is nil"
+    (let [transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at (Instant/parse "2024-06-15T10:30:00Z")}
+                                               {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-minutes max-minutes}
+                                                        {})
+          result (logic.fraud-score/normalize-minutes-since-last-tx transaction nil normalization-config)]
+      (is (match? -1 result)))))
+
+(s/deftest normalize-minutes-since-last-tx-proportional-test
+  (testing "it should return proportional score when last-transaction is 30 minutes ago"
+    (let [current-time (Instant/parse "2024-06-15T10:30:00Z")
+          last-tx-time (Instant/parse "2024-06-15T10:00:00Z")
+          transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at current-time}
+                                               {})
+          last-transaction (helpers.schema/generate models.transaction/LastTransaction
+                                                    {:timestamp last-tx-time}
+                                                    {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-minutes max-minutes}
+                                                        {})
+          result (logic.fraud-score/normalize-minutes-since-last-tx transaction last-transaction normalization-config)]
+      (is (match? expected-minutes-30-score result)))))
+
+(s/deftest normalize-minutes-since-last-tx-clamped-high-test
+  (testing "it should clamp to 1.0 when minutes exceed max-minutes"
+    (let [current-time (Instant/parse "2024-06-15T12:00:00Z")
+          last-tx-time (Instant/parse "2024-06-15T10:00:00Z")
+          transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at current-time}
+                                               {})
+          last-transaction (helpers.schema/generate models.transaction/LastTransaction
+                                                    {:timestamp last-tx-time}
+                                                    {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-minutes max-minutes}
+                                                        {})
+          result (logic.fraud-score/normalize-minutes-since-last-tx transaction last-transaction normalization-config)]
+      (is (match? expected-minutes-120-score result)))))
+
+(s/deftest normalize-minutes-since-last-tx-clamped-low-test
+  (testing "it should clamp to 0.0 when minutes are negative (future timestamp)"
+    (let [current-time (Instant/parse "2024-06-15T10:00:00Z")
+          last-tx-time (Instant/parse "2024-06-15T10:05:00Z")
+          transaction (helpers.schema/generate models.transaction/Transaction
+                                               {:requested-at current-time}
+                                               {})
+          last-transaction (helpers.schema/generate models.transaction/LastTransaction
+                                                    {:timestamp last-tx-time}
+                                                    {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-minutes max-minutes}
+                                                        {})
+          result (logic.fraud-score/normalize-minutes-since-last-tx transaction last-transaction normalization-config)]
+      (is (match? expected-minutes-negative-score result)))))
+
+;; normalize-km-from-last-tx tests
+(s/deftest normalize-km-from-last-tx-nil-test
+  (testing "it should return -1 when last-transaction is nil"
+    (let [normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-last-tx nil normalization-config)]
+      (is (match? -1 result)))))
+
+(s/deftest normalize-km-from-last-tx-proportional-test
+  (testing "it should return proportional score when km is 50"
+    (let [last-transaction (helpers.schema/generate models.transaction/LastTransaction
+                                                    {:km-from-current km-from-current-50}
+                                                    {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-last-tx last-transaction normalization-config)]
+      (is (match? expected-km-50-score result)))))
+
+(s/deftest normalize-km-from-last-tx-clamped-high-test
+  (testing "it should clamp to 1.0 when km exceeds max-km"
+    (let [last-transaction (helpers.schema/generate models.transaction/LastTransaction
+                                                    {:km-from-current km-from-current-200}
+                                                    {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-last-tx last-transaction normalization-config)]
+      (is (match? expected-km-200-score result)))))
+
+(s/deftest normalize-km-from-last-tx-clamped-low-test
+  (testing "it should clamp to 0.0 when km is 0"
+    (let [last-transaction (helpers.schema/generate models.transaction/LastTransaction
+                                                    {:km-from-current km-from-current-0}
+                                                    {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-last-tx last-transaction normalization-config)]
+      (is (match? expected-km-0-score result)))))
+
+;; normalize-km-from-home tests
+(s/deftest normalize-km-from-home-zero-test
+  (testing "it should return 0.0 when km-from-home is 0"
+    (let [terminal (helpers.schema/generate models.terminal/Terminal
+                                            {:km-from-home km-from-home-0}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-home terminal normalization-config)]
+      (is (match? expected-km-home-0-score result)))))
+
+(s/deftest normalize-km-from-home-proportional-test
+  (testing "it should return proportional score when km-from-home is 50"
+    (let [terminal (helpers.schema/generate models.terminal/Terminal
+                                            {:km-from-home km-from-home-50}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-home terminal normalization-config)]
+      (is (match? expected-km-home-50-score result)))))
+
+(s/deftest normalize-km-from-home-at-max-test
+  (testing "it should return 1.0 when km-from-home equals max-km"
+    (let [terminal (helpers.schema/generate models.terminal/Terminal
+                                            {:km-from-home km-from-home-100}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-home terminal normalization-config)]
+      (is (match? expected-km-home-100-score result)))))
+
+(s/deftest normalize-km-from-home-over-max-test
+  (testing "it should clamp to 1.0 when km-from-home exceeds max-km"
+    (let [terminal (helpers.schema/generate models.terminal/Terminal
+                                            {:km-from-home km-from-home-200}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-km max-km}
+                                                        {})
+          result (logic.fraud-score/normalize-km-from-home terminal normalization-config)]
+      (is (match? expected-km-home-200-score result)))))
+
+;; normalize-tx-count-24h tests
+(s/deftest normalize-tx-count-24h-zero-test
+  (testing "it should return 0.0 when tx-count-24h is 0"
+    (let [customer-config (helpers.schema/generate models.customer/Customer
+                                                   {:tx-count-24h tx-count-0}
+                                                   {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-tx-count-24h max-tx-count-24h}
+                                                        {})
+          result (logic.fraud-score/normalize-tx-count-24h customer-config normalization-config)]
+      (is (match? expected-tx-count-0-score result)))))
+
+(s/deftest normalize-tx-count-24h-proportional-test
+  (testing "it should return proportional score when tx-count-24h is 5"
+    (let [customer-config (helpers.schema/generate models.customer/Customer
+                                                   {:tx-count-24h tx-count-5}
+                                                   {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-tx-count-24h max-tx-count-24h}
+                                                        {})
+          result (logic.fraud-score/normalize-tx-count-24h customer-config normalization-config)]
+      (is (match? expected-tx-count-5-score result)))))
+
+(s/deftest normalize-tx-count-24h-at-max-test
+  (testing "it should return 1.0 when tx-count-24h equals max-tx-count-24h"
+    (let [customer-config (helpers.schema/generate models.customer/Customer
+                                                   {:tx-count-24h tx-count-10}
+                                                   {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-tx-count-24h max-tx-count-24h}
+                                                        {})
+          result (logic.fraud-score/normalize-tx-count-24h customer-config normalization-config)]
+      (is (match? expected-tx-count-10-score result)))))
+
+(s/deftest normalize-tx-count-24h-over-max-test
+  (testing "it should clamp to 1.0 when tx-count-24h exceeds max-tx-count-24h"
+    (let [customer-config (helpers.schema/generate models.customer/Customer
+                                                   {:tx-count-24h tx-count-20}
+                                                   {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-tx-count-24h max-tx-count-24h}
+                                                        {})
+          result (logic.fraud-score/normalize-tx-count-24h customer-config normalization-config)]
+      (is (match? expected-tx-count-20-score result)))))
+
+;; normalize-is-online tests
+(s/deftest normalize-is-online-true-test
+  (testing "it should return 1 when terminal is online"
+    (let [result (logic.fraud-score/normalize-is-online terminal-online)]
+      (is (match? expected-online-score result)))))
+
+(s/deftest normalize-is-online-false-test
+  (testing "it should return 0 when terminal is offline"
+    (let [result (logic.fraud-score/normalize-is-online terminal-offline)]
+      (is (match? expected-offline-score result)))))
+
+;; normalize-card-present tests
+(s/deftest normalize-card-present-true-test
+  (testing "it should return 1 when card is present"
+    (let [result (logic.fraud-score/normalize-card-present terminal-card-present)]
+      (is (match? expected-card-present-score result)))))
+
+(s/deftest normalize-card-present-false-test
+  (testing "it should return 0 when card is not present"
+    (let [result (logic.fraud-score/normalize-card-present terminal-card-not-present)]
+      (is (match? expected-card-not-present-score result)))))
+
+;; normalize-unknown-merchant tests
+(s/deftest normalize-unknown-merchant-known-test
+  (testing "it should return 0 when merchant is in known-merchants list"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:id merchant-known}
+                                            {})
+          result (logic.fraud-score/normalize-unknown-merchant merchant customer-with-known-merchants)]
+      (is (match? expected-known-merchant-score result)))))
+
+(s/deftest normalize-unknown-merchant-unknown-test
+  (testing "it should return 1 when merchant is not in known-merchants list"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:id merchant-unknown}
+                                            {})
+          result (logic.fraud-score/normalize-unknown-merchant merchant customer-with-known-merchants)]
+      (is (match? expected-unknown-merchant-score result)))))
+
+(s/deftest normalize-unknown-merchant-empty-list-test
+  (testing "it should return 1 when known-merchants list is empty"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:id merchant-known}
+                                            {})
+          result (logic.fraud-score/normalize-unknown-merchant merchant customer-with-empty-known-merchants)]
+      (is (match? expected-unknown-merchant-score result)))))
+
+;; normalize-merchant-avg-amount tests
+(s/deftest normalize-merchant-avg-amount-zero-test
+  (testing "it should return 0.0 when avg-amount is 0"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:avg-amount merchant-avg-amount-0}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-merchant-avg-amount max-merchant-avg-amount}
+                                                        {})
+          result (logic.fraud-score/normalize-merchant-avg-amount merchant normalization-config)]
+      (is (match? expected-merchant-avg-0-score result)))))
+
+(s/deftest normalize-merchant-avg-amount-proportional-test
+  (testing "it should return proportional score when avg-amount is 500"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:avg-amount merchant-avg-amount-500}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-merchant-avg-amount max-merchant-avg-amount}
+                                                        {})
+          result (logic.fraud-score/normalize-merchant-avg-amount merchant normalization-config)]
+      (is (match? expected-merchant-avg-500-score result)))))
+
+(s/deftest normalize-merchant-avg-amount-at-max-test
+  (testing "it should return 1.0 when avg-amount equals max-merchant-avg-amount"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:avg-amount merchant-avg-amount-1000}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-merchant-avg-amount max-merchant-avg-amount}
+                                                        {})
+          result (logic.fraud-score/normalize-merchant-avg-amount merchant normalization-config)]
+      (is (match? expected-merchant-avg-1000-score result)))))
+
+(s/deftest normalize-merchant-avg-amount-over-max-test
+  (testing "it should clamp to 1.0 when avg-amount exceeds max-merchant-avg-amount"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:avg-amount merchant-avg-amount-2000}
+                                            {})
+          normalization-config (helpers.schema/generate models.normalization/Normalization
+                                                        {:max-merchant-avg-amount max-merchant-avg-amount}
+                                                        {})
+          result (logic.fraud-score/normalize-merchant-avg-amount merchant normalization-config)]
+      (is (match? expected-merchant-avg-2000-score result)))))
