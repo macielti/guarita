@@ -11,5 +11,9 @@
    :max-tx-count-24h        s/Int
    :max-merchant-avg-amount s/Int})
 
+(def mcc-risk
+  {s/Str s/Num})
+
 (s/defschema Config
-  (common.schema/loose-schema {:normalization normalization}))
+  (common.schema/loose-schema {:normalization normalization
+                               :mcc-risk      mcc-risk}))

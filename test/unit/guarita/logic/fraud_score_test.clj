@@ -11,6 +11,20 @@
             [schema.test :as s])
   (:import [java.time Instant]))
 
+;; normalize-mcc-risk test fixtures
+(def mcc-risk {"5411" 0.15
+               "7995" 0.85
+               "5999" 0.50})
+
+(def mcc-known-low "5411")
+(def expected-mcc-known-low-score 0.15)
+
+(def mcc-known-high "7995")
+(def expected-mcc-known-high-score 0.85)
+
+(def mcc-unknown "9999")
+(def expected-mcc-unknown-score 0.5)
+
 ;; Shared fixtures
 (def max-amount 1000)
 (def max-installments 12)
@@ -660,3 +674,28 @@
                                                         {})
           result (logic.fraud-score/normalize-merchant-avg-amount merchant normalization-config)]
       (is (match? expected-merchant-avg-2000-score result)))))
+
+;; normalize-mcc-risk tests
+(s/deftest normalize-mcc-risk-known-low-test
+  (testing "it should return the table risk score for a known low-risk MCC"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:mcc mcc-known-low}
+                                            {})
+          result (logic.fraud-score/normalize-mcc-risk merchant mcc-risk)]
+      (is (match? expected-mcc-known-low-score result)))))
+
+(s/deftest normalize-mcc-risk-known-high-test
+  (testing "it should return the table risk score for a known high-risk MCC"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:mcc mcc-known-high}
+                                            {})
+          result (logic.fraud-score/normalize-mcc-risk merchant mcc-risk)]
+      (is (match? expected-mcc-known-high-score result)))))
+
+(s/deftest normalize-mcc-risk-unknown-test
+  (testing "it should return 0.5 as default when MCC is not in the risk table"
+    (let [merchant (helpers.schema/generate models.merchant/Merchant
+                                            {:mcc mcc-unknown}
+                                            {})
+          result (logic.fraud-score/normalize-mcc-risk merchant mcc-risk)]
+      (is (match? expected-mcc-unknown-score result)))))

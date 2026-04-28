@@ -1,5 +1,6 @@
 (ns guarita.logic.fraud-score
   (:require [guarita.models.customer :as models.customer]
+            [guarita.models.mcc :as models.mcc]
             [guarita.models.merchant :as models.merchant]
             [guarita.models.normalization :as models.normalization]
             [guarita.models.terminal :as models.terminal]
@@ -86,3 +87,8 @@
   [{:keys [avg-amount]}           :- models.merchant/Merchant
    {:keys [max-merchant-avg-amount]} :- models.normalization/Normalization]
   (clamp (/ avg-amount max-merchant-avg-amount)))
+
+(s/defn normalize-mcc-risk :- s/Num
+  [{:keys [mcc]} :- models.merchant/Merchant
+   mcc-risk      :- models.mcc/MccRisk]
+  (get mcc-risk mcc 0.5))
