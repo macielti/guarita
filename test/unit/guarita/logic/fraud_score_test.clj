@@ -3,6 +3,7 @@
             [common-test-clj.helpers.schema :as helpers.schema]
             [guarita.logic.fraud-score :as logic.fraud-score]
             [guarita.models.customer :as models.customer]
+            [guarita.models.fraud-score :as models.fraud-score]
             [guarita.models.merchant :as models.merchant]
             [guarita.models.normalization :as models.normalization]
             [guarita.models.terminal :as models.terminal]
@@ -699,3 +700,98 @@
                                             {})
           result (logic.fraud-score/normalize-mcc-risk merchant mcc-risk)]
       (is (match? expected-mcc-unknown-score result)))))
+
+;; vectorized test fixtures
+(def vectorized-spec-normalization
+  (helpers.schema/generate models.normalization/Normalization
+                           {:max-amount              10000
+                            :max-installments        12
+                            :amount-vs-avg-ratio     10
+                            :max-minutes             1440
+                            :max-km                  1000
+                            :max-tx-count-24h        20
+                            :max-merchant-avg-amount 10000}
+                           {}))
+
+(def vectorized-spec-transaction
+  (helpers.schema/generate models.transaction/Transaction
+                           {:amount       9505.97
+                            :installments 10
+                            :requested-at (Instant/parse "2026-03-14T05:15:12Z")}
+                           {}))
+
+(def vectorized-spec-customer
+  (helpers.schema/generate models.customer/Customer
+                           {:avg-amount      81.28
+                            :tx-count-24h    20
+                            :known-merchants ["MERC-008" "MERC-007" "MERC-005"]}
+                           {}))
+
+(def vectorized-spec-merchant
+  (helpers.schema/generate models.merchant/Merchant
+                           {:id         "MERC-068"
+                            :mcc        "7802"
+                            :avg-amount 54.86}
+                           {}))
+
+(def vectorized-spec-terminal
+  (helpers.schema/generate models.terminal/Terminal
+                           {:online?       false
+                            :card-present? true
+                            :km-from-home  952.27}
+                           {}))
+
+(def vectorized-spec-mcc-risk
+  {"7802" 0.75})
+
+(s/deftest vectorized-no-last-transaction-test
+  (testing "it should return a 14-element vector with nil sentinels at indices 5 and 6 when last-transaction is nil"
+    (let [fraud-score (helpers.schema/generate models.fraud-score/FraudScore
+                                               {:transaction vectorized-spec-transaction
+                                                :customer    vectorized-spec-customer
+                                                :merchant    vectorized-spec-merchant
+                                                :terminal    vectorized-spec-terminal}
+                                               {})
+          result (logic.fraud-score/vectorized fraud-score vectorized-spec-normalization vectorized-spec-mcc-risk)]
+      (is (= 14 (count result)))
+      (is (= -1 (nth result 5)))
+      (is (= -1 (nth result 6)))
+      (is (= 0 (nth result 9)))
+      (is (= 1 (nth result 10)))
+      (is (= 1 (nth result 11)))
+      (is (= 0.75 (nth result 12)))
+      (is (< (Math/abs (- (nth result 0) 0.950597)) 0.0001))
+      (is (< (Math/abs (- (nth result 1) 0.833333)) 0.0001))
+      (is (< (Math/abs (- (nth result 2) 1.0)) 0.0001))
+      (is (< (Math/abs (- (nth result 3) 0.217391)) 0.0001))
+      (is (< (Math/abs (- (nth result 4) 0.833333)) 0.0001))
+      (is (< (Math/abs (- (nth result 7) 0.95227)) 0.0001))
+      (is (< (Math/abs (- (nth result 8) 1.0)) 0.0001))
+      (is (< (Math/abs (- (nth result 13) 0.005486)) 0.0001)))))
+
+(s/deftest vectorized-with-last-transaction-test
+  (testing "it should return a 14-element vector with real values at indices 5 and 6 when last-transaction is present"
+    (let [fraud-score (helpers.schema/generate models.fraud-score/FraudScore
+                                               {:transaction      vectorized-spec-transaction
+                                                :customer         vectorized-spec-customer
+                                                :merchant         vectorized-spec-merchant
+                                                :terminal         vectorized-spec-terminal
+                                                :last-transaction {:timestamp      (Instant/parse "2026-03-14T05:00:00Z")
+                                                                   :km-from-current 50.0}}
+                                               {})
+          result (logic.fraud-score/vectorized fraud-score vectorized-spec-normalization vectorized-spec-mcc-risk)]
+      (is (= 14 (count result)))
+      (is (< (Math/abs (- (nth result 5) 0.010417)) 0.0001))
+      (is (< (Math/abs (- (nth result 6) 0.05)) 0.0001))
+      (is (= 0 (nth result 9)))
+      (is (= 1 (nth result 10)))
+      (is (= 1 (nth result 11)))
+      (is (= 0.75 (nth result 12)))
+      (is (< (Math/abs (- (nth result 0) 0.950597)) 0.0001))
+      (is (< (Math/abs (- (nth result 1) 0.833333)) 0.0001))
+      (is (< (Math/abs (- (nth result 2) 1.0)) 0.0001))
+      (is (< (Math/abs (- (nth result 3) 0.217391)) 0.0001))
+      (is (< (Math/abs (- (nth result 4) 0.833333)) 0.0001))
+      (is (< (Math/abs (- (nth result 7) 0.95227)) 0.0001))
+      (is (< (Math/abs (- (nth result 8) 1.0)) 0.0001))
+      (is (< (Math/abs (- (nth result 13) 0.005486)) 0.0001)))))

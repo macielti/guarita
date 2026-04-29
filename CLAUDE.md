@@ -65,3 +65,8 @@ Environment-keyed in `resources/config.edn`; running env (`:prod`) is selected i
 - Extract expected values to namespace-level `def`s; pass them as overrides to `helpers.schema/generate` and reference the symbols directly in the `match?` pattern — avoid `(:key fixture)` extraction inside `match?`.
 - Pass predicate functions (e.g. `inst?`, `number?`, `boolean?`) directly as matcher values — no `m/pred` wrapper needed.
 - Require pattern: `[matcher-combinators.test :refer [match?]]`.
+- Controllers do not need unit tests; they are thin orchestration layers tested via integration tests (HTTP handler → controller → logic).
+
+### Code style preferences
+
+- For chained adapter → controller calls, use thread-first (`->`): `(-> (adapters.X/wire->X wire) controllers.X/X!)`. The first form explicitly calls the adapter; subsequent forms are threaded.
