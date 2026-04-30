@@ -9,6 +9,8 @@ COPY . /usr/src/app
 
 WORKDIR /usr/src/app
 
+RUN python3 scripts/generate_dataset.py
+
 RUN lein do clean, uberjar, native
 
 FROM gcr.io/distroless/base:latest

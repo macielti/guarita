@@ -14,11 +14,8 @@ LICENSE
 README.md
 .git
 .github
-/resources/policies
 /resources/config.edn
 /resources/config.example.edn
-/resources/migration.config.edn
-/resources/migration.example.config.edn
 /test
 /doc
 /dev-resources

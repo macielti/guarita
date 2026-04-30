@@ -28,6 +28,8 @@ Hexagonal architecture with the following layers (each entity gets its own file 
 
 Assembled in `src/guarita/components.clj` under the `arranjo` map. Components: config → routes → service. Adding a component means adding a key to `arranjo` and threading it into the `:components` map passed to `::component.service/service`.
 
+**Component definitions**: Local Integrant components (not from libraries) live as separate top-level files at `src/guarita/<component>.clj` (e.g., `dataset.clj`, not `components/dataset.clj`). Import them unaliased to activate their `defmethod` registrations; wire refs to `arranjo`.
+
 ### Route registration
 
 Routes live in `src/guarita/diplomat/http_server.clj`. Import and alias `io.pedestal.service.interceptors`, then each route uses:
@@ -50,6 +52,23 @@ Example:
 ### Config
 
 Environment-keyed in `resources/config.edn`; running env (`:prod`) is selected in `components.clj`. Service binds `0.0.0.0:8000`.
+
+### Reference data
+
+`resources/vectors.bin` and `resources/labels.bin` are the k-NN reference dataset used by the fraud-scoring controller. They are **generated at Docker build time** and are not checked into git.
+
+- **Source**: [`references.json.gz`](https://github.com/zanfranceschi/rinha-de-backend-2026/blob/main/resources/references.json.gz) from the rinha-de-backend-2026 repo.
+- **`vectors.bin`** — N × 14 matrix of `float32` values in little-endian byte order. Each row is one reference transaction's `FraudScoreVector` (the same 14 features produced by `logic.fraud-score/vectorized`).
+- **`labels.bin`** — N bytes of `uint8`. One byte per row: `0` = legit, `1` = fraud.
+
+To regenerate locally (needed for `lein run` / `lein test`):
+```
+python3 scripts/generate_dataset.py
+```
+
+Reading the files at runtime: load `vectors.bin` as a flat `float32` array and reshape to `(n-rows, 14)`; read `labels.bin` byte-by-byte. Row `i` in `vectors.bin` corresponds to byte `i` in `labels.bin`.
+
+KNN search is implemented in `guarita.dataset` as `knn` (sequential) and `knn-parallel` (splits across all CPU cores via `pmap`). `knn-parallel` is the faster implementation and should be used in the controller.
 
 ## Conventions / gotchas
 

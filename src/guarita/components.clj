@@ -1,6 +1,7 @@
 (ns guarita.components
   (:require [common-clj.integrant-components.config :as component.config]
             [common-clj.integrant-components.routes :as component.routes]
+            [guarita.dataset]
             [guarita.diplomat.http-server :as diplomat.http-server]
             [integrant.core :as ig]
             [service.component :as component.service]
@@ -11,13 +12,16 @@
 (taoensso.timbre.tools.logging/use-timbre)
 
 (def components
-  {:config (ig/ref ::component.config/config)})
+  {:config  (ig/ref ::component.config/config)
+   :dataset (ig/ref :guarita.dataset/dataset)})
 
 (def arranjo
   (merge
-   {::component.config/config {:path "resources/config.edn"
-                               :env  :prod}}
-   {::component.routes/routes {:routes diplomat.http-server/routes}}
+   {::component.config/config  {:path "resources/config.edn"
+                                :env  :prod}}
+   {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
+                              :labels-path  "resources/labels.bin"}}
+   {::component.routes/routes   {:routes diplomat.http-server/routes}}
    {::component.service/service {:components (merge components
                                                     {:routes (ig/ref ::component.routes/routes)})}}))
 
