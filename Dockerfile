@@ -1,6 +1,7 @@
 FROM container-registry.oracle.com/graalvm/native-image:23 as build
 
-RUN dnf install -y python3 && \
+RUN apt-get update && \
+    apt-get install -y python3 && \
     curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
     chmod +x lein && \
     mv lein /usr/bin/lein && \
