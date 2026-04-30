@@ -10,6 +10,6 @@
     :route-name :ready]
    ["/fraud-score"
     :post [pedestal.service.interceptors/json-body
-           (service.interceptors/wire-in-body-schema {:fraud-score wire.in.fraud-score/FraudScore})
+           (service.interceptors/wire-in-body-schema wire.in.fraud-score/FraudScore)
            diplomat.http-server.fraud-score/fraud-score!]
     :route-name :fraud-score]])

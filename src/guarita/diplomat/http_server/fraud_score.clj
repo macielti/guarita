@@ -5,8 +5,7 @@
 
 (s/defn fraud-score!
   [{:keys [json-params components]}]
-  (let [fraud-score (:fraud-score json-params)
-        result (-> (adapters.fraud-score/wire->fraud-score fraud-score)
+  (let [result (-> (adapters.fraud-score/wire->fraud-score json-params)
                    (controllers.fraud-score/fraud-score! components))]
     {:status 200
      :body   result}))
