@@ -24,5 +24,13 @@
   {
     "name": "java.time.ZonedDateTime",
     "allPublicMethods": true
+  },
+  {
+    "name": "java.time.DayOfWeek",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.time.Duration",
+    "allPublicMethods": true
   }
 ]
