@@ -4,8 +4,9 @@
             [schema.core :as s]))
 
 (s/defn fraud-score!
-  [{{:keys [fraud-score]} :json-params}]
+  [{{:keys [fraud-score]} :json-params
+    :keys                 [components]}]
   (let [result (-> (adapters.fraud-score/wire->fraud-score fraud-score)
-                   controllers.fraud-score/fraud-score!)]
+                   (controllers.fraud-score/fraud-score! components))]
     {:status 200
      :body   result}))
