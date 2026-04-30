@@ -15,5 +15,7 @@ jobs:
           java-version: '21'
       - name: Install dependencies
         run: lein deps
+      - name: Generate dataset
+        run: python3 scripts/generate_dataset.py
       - name: Run unit and integration tests
         run: lein test
