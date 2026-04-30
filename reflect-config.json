@@ -11,5 +11,18 @@
   {
     "name": "java.time.Instant",
     "allPublicMethods": true
+  },
+  {
+    "name": "java.time.OffsetDateTime",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.time.ZoneOffset",
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.time.ZonedDateTime",
+    "allPublicMethods": true
   }
 ]
