@@ -7,5 +7,9 @@
     "allPublicMethods": true,
     "allDeclaredFields": true,
     "allPublicFields": true
+  },
+  {
+    "name": "java.time.Instant",
+    "allPublicMethods": true
   }
 ]
