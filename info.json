@@ -1,0 +1,7 @@
+{
+  "participants": ["Bruno do Nascimento Maciel"],
+  "social": ["https://github.com/macielti"],
+  "source-code-repo": "https://github.com/macielti/guarita",
+  "stack": ["clojure", "graalvm", "native-image"],
+  "open_to_work": false
+}

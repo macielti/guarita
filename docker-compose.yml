@@ -1,0 +1,10 @@
+services:
+  api:
+    image: ghcr.io/macielti/guarita:latest
+    ports:
+      - "9999:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: "3GB"
