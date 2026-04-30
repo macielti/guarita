@@ -1,6 +1,5 @@
 (ns guarita.wire.config
-  (:require [common-clj.schema.core :as common.schema]
-            [schema.core :as s]))
+  (:require [schema.core :as s]))
 
 (def normalization
   {:max-amount              s/Int
@@ -15,5 +14,6 @@
   {s/Str s/Num})
 
 (s/defschema Config
-  (common.schema/loose-schema {:normalization normalization
-                               :mcc-risk      mcc-risk}))
+  {:normalization normalization
+   :mcc-risk      mcc-risk
+   s/Keyword      s/Any})
