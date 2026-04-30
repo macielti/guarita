@@ -1,4 +1,4 @@
-FROM python:3-slim AS dataset
+FROM --platform=linux/amd64 python:3-slim AS dataset
 
 WORKDIR /usr/src/app
 
@@ -6,7 +6,7 @@ COPY scripts/generate_dataset.py scripts/generate_dataset.py
 
 RUN mkdir -p resources && python3 scripts/generate_dataset.py
 
-FROM container-registry.oracle.com/graalvm/native-image:23 AS build
+FROM --platform=linux/amd64 container-registry.oracle.com/graalvm/native-image:23 AS build
 
 RUN curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
     chmod +x lein && \
@@ -22,7 +22,7 @@ COPY --from=dataset /usr/src/app/resources/labels.bin resources/labels.bin
 
 RUN lein do clean, uberjar, native
 
-FROM gcr.io/distroless/base:latest
+FROM --platform=linux/amd64 gcr.io/distroless/base:latest
 
 WORKDIR /app
 
