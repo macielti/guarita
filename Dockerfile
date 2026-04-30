@@ -27,5 +27,7 @@ FROM gcr.io/distroless/base:latest
 WORKDIR /app
 
 COPY --from=build /usr/src/app/target/guarita /app/guarita
+COPY --from=dataset /usr/src/app/resources/vectors.bin /app/resources/vectors.bin
+COPY --from=dataset /usr/src/app/resources/labels.bin /app/resources/labels.bin
 
 CMD ["./guarita"]
