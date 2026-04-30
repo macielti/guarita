@@ -3,6 +3,8 @@ services:
     image: ghcr.io/macielti/guarita:latest
     ports:
       - "9999:8000"
+    volumes:
+      - ./resources:/app/resources
     deploy:
       resources:
         limits:

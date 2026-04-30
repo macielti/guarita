@@ -1,0 +1,20 @@
+{:prod {:name           "guarita"
+        :service       {:host "0.0.0.0"
+                        :port 8000}
+        :normalization {:max-amount              10000
+                        :max-installments        12
+                        :amount-vs-avg-ratio     10
+                        :max-minutes             1440
+                        :max-km                  1000
+                        :max-tx-count-24h        20
+                        :max-merchant-avg-amount 10000}
+        :mcc-risk      {"5411" 0.15
+                        "5812" 0.30
+                        "5912" 0.20
+                        "5944" 0.45
+                        "7801" 0.80
+                        "7802" 0.75
+                        "7995" 0.85
+                        "4511" 0.35
+                        "5311" 0.25
+                        "5999" 0.50}}}
