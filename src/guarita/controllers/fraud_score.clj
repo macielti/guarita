@@ -19,4 +19,4 @@
         fraud-count   (count (filter #(= :fraud (:label %)) neighbors))
         score         (/ (double fraud-count) k)]
     {:approved    (< score threshold)
-     :fraud-score score}))
+     :fraud_score score}))

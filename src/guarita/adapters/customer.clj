@@ -4,7 +4,7 @@
             [schema.core :as s]))
 
 (s/defn wire->customer :- models.customer/Customer
-  [{:keys [avg-amount tx-count-24h known-merchants]} :- wire.in.customer/Customer]
-  {:avg-amount      avg-amount
-   :tx-count-24h    tx-count-24h
-   :known-merchants known-merchants})
+  [{:keys [avg_amount tx_count_24h known_merchants]} :- wire.in.customer/Customer]
+  {:avg-amount      avg_amount
+   :tx-count-24h    tx_count_24h
+   :known-merchants known_merchants})

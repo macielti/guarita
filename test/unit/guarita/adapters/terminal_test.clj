@@ -13,9 +13,9 @@
 (s/deftest wire->terminal-test
   (testing "it should convert a wire terminal to an internal terminal"
     (let [fixture (helpers.schema/generate wire.in.terminal/Terminal
-                                           {:is-online    terminal-online?
-                                            :card-present terminal-card-present?
-                                            :km-from-home terminal-km-from-home}
+                                           {:is_online    terminal-online?
+                                            :card_present terminal-card-present?
+                                            :km_from_home terminal-km-from-home}
                                            {})
           result (adapters.terminal/wire->terminal fixture)]
       (is (match? {:online?       terminal-online?

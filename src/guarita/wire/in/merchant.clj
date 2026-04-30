@@ -4,4 +4,4 @@
 (s/defschema Merchant
   {:id         s/Str
    :mcc        s/Str
-   :avg-amount s/Num})
+   :avg_amount s/Num})

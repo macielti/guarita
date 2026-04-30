@@ -2,6 +2,6 @@
   (:require [schema.core :as s]))
 
 (s/defschema Customer
-  {:avg-amount      s/Num
-   :tx-count-24h    s/Int
-   :known-merchants [s/Str]})
+  {:avg_amount      s/Num
+   :tx_count_24h    s/Int
+   :known_merchants [s/Str]})

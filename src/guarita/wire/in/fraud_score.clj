@@ -11,4 +11,4 @@
    :customer         wire.in.customer/Customer
    :merchant         wire.in.merchant/Merchant
    :terminal         wire.in.terminal/Terminal
-   (s/optional-key :last-transaction) wire.in.transaction/LastTransaction})
+   (s/optional-key :last_transaction) wire.in.transaction/LastTransaction})

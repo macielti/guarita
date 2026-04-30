@@ -4,7 +4,7 @@
             [schema.core :as s]))
 
 (s/defn wire->terminal :- models.terminal/Terminal
-  [{:keys [is-online card-present km-from-home]} :- wire.in.terminal/Terminal]
-  {:online?       is-online
-   :card-present? card-present
-   :km-from-home  km-from-home})
+  [{:keys [is_online card_present km_from_home]} :- wire.in.terminal/Terminal]
+  {:online?       is_online
+   :card-present? card_present
+   :km-from-home  km_from_home})

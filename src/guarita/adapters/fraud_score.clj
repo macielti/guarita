@@ -9,12 +9,12 @@
             [schema.core :as s]))
 
 (s/defn wire->fraud-score :- models.fraud-score/FraudScore
-  [{:keys [id transaction customer merchant terminal last-transaction]}
+  [{:keys [id transaction customer merchant terminal last_transaction]}
    :- wire.in.fraud-score/FraudScore]
   (medley/assoc-some {:id          id
                       :transaction (adapters.transaction/wire->transaction transaction)
                       :customer    (adapters.customer/wire->customer customer)
                       :merchant    (adapters.merchant/wire->merchant merchant)
                       :terminal    (adapters.terminal/wire->terminal terminal)}
-                     :last-transaction (some-> last-transaction
+                     :last-transaction (some-> last_transaction
                                                adapters.transaction/wire->last-transaction)))

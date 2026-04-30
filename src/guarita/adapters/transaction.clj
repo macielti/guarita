@@ -5,12 +5,12 @@
   (:import [java.time Instant]))
 
 (s/defn wire->transaction :- models.transaction/Transaction
-  [{:keys [amount installments requested-at]} :- wire.in.transaction/Transaction]
+  [{:keys [amount installments requested_at]} :- wire.in.transaction/Transaction]
   {:amount       amount
    :installments installments
-   :requested-at (Instant/parse requested-at)})
+   :requested-at (Instant/parse requested_at)})
 
 (s/defn wire->last-transaction :- models.transaction/LastTransaction
-  [{:keys [timestamp km-from-current]} :- wire.in.transaction/LastTransaction]
+  [{:keys [timestamp km_from_current]} :- wire.in.transaction/LastTransaction]
   {:timestamp       (Instant/parse timestamp)
-   :km-from-current km-from-current})
+   :km-from-current km_from_current})

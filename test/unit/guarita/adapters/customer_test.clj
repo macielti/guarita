@@ -13,9 +13,9 @@
 (s/deftest wire->customer-test
   (testing "it should convert a wire customer to an internal customer"
     (let [fixture (helpers.schema/generate wire.in.customer/Customer
-                                           {:avg-amount      customer-avg-amount
-                                            :tx-count-24h    customer-tx-count
-                                            :known-merchants customer-known-merchants}
+                                           {:avg_amount      customer-avg-amount
+                                            :tx_count_24h    customer-tx-count
+                                            :known_merchants customer-known-merchants}
                                            {})
           result (adapters.customer/wire->customer fixture)]
       (is (match? {:avg-amount      customer-avg-amount

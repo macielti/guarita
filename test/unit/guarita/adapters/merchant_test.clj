@@ -15,7 +15,7 @@
     (let [fixture (helpers.schema/generate wire.in.merchant/Merchant
                                            {:id         merchant-id
                                             :mcc        merchant-mcc
-                                            :avg-amount merchant-avg-amount}
+                                            :avg_amount merchant-avg-amount}
                                            {})
           result (adapters.merchant/wire->merchant fixture)]
       (is (match? {:id         merchant-id

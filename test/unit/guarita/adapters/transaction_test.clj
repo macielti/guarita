@@ -16,7 +16,7 @@
     (let [fixture (helpers.schema/generate wire.in.transaction/Transaction
                                            {:amount       transaction-amount
                                             :installments transaction-installments
-                                            :requested-at "2024-06-15T10:30:00Z"}
+                                            :requested_at "2024-06-15T10:30:00Z"}
                                            {})
           result (adapters.transaction/wire->transaction fixture)]
       (is (match? {:amount       transaction-amount
@@ -28,7 +28,7 @@
   (testing "it should convert a wire last-transaction to an internal last-transaction"
     (let [fixture (helpers.schema/generate wire.in.transaction/LastTransaction
                                            {:timestamp       "2024-06-14T08:00:00Z"
-                                            :km-from-current last-transaction-km-from-current}
+                                            :km_from_current last-transaction-km-from-current}
                                            {})
           result (adapters.transaction/wire->last-transaction fixture)]
       (is (match? {:km-from-current last-transaction-km-from-current

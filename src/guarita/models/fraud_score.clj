@@ -31,4 +31,4 @@
 
 (s/defschema FraudScoreResult
   {:approved    s/Bool
-   :fraud-score s/Num})
+   :fraud_score s/Num})

@@ -8,7 +8,7 @@
 
 (def wire-in-transaction
   (helpers.schema/generate wire.in.transaction/Transaction
-                           {:requested-at "2024-06-15T10:30:00Z"}
+                           {:requested_at "2024-06-15T10:30:00Z"}
                            {}))
 
 (def wire-in-last-transaction
@@ -32,8 +32,8 @@
                             :customer         wire-in-customer
                             :merchant         wire-in-merchant
                             :terminal         wire-in-terminal
-                            :last-transaction wire-in-last-transaction}
+                            :last_transaction wire-in-last-transaction}
                            {}))
 
 (def wire-in-fraud-score-no-last-transaction
-  (dissoc wire-in-fraud-score :last-transaction))
+  (dissoc wire-in-fraud-score :last_transaction))

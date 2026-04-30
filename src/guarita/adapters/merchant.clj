@@ -4,7 +4,7 @@
             [schema.core :as s]))
 
 (s/defn wire->merchant :- models.merchant/Merchant
-  [{:keys [id mcc avg-amount]} :- wire.in.merchant/Merchant]
+  [{:keys [id mcc avg_amount]} :- wire.in.merchant/Merchant]
   {:id         id
    :mcc        mcc
-   :avg-amount avg-amount})
+   :avg-amount avg_amount})

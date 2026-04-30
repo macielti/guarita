@@ -4,8 +4,8 @@
 (s/defschema Transaction
   {:amount       s/Num
    :installments s/Int
-   :requested-at s/Str})
+   :requested_at s/Str})
 
 (s/defschema LastTransaction
   {:timestamp       s/Str
-   :km-from-current s/Num})
+   :km_from_current s/Num})
