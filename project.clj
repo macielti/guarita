@@ -53,7 +53,7 @@
                                                     "native-image"
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
-                                                    "-march=x86-64-v1"
+                                                    "-O3"
                                                     "--report-unsupported-elements-at-runtime"
 
                                                     "--initialize-at-build-time"
