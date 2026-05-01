@@ -1,6 +1,8 @@
 services:
   nginx:
     image: nginx:alpine
+    container_name: guarita_nginx
+    restart: unless-stopped
     ports:
       - "9999:9999"
     volumes:
@@ -16,6 +18,8 @@ services:
 
   api1:
     image: ghcr.io/macielti/guarita:main
+    container_name: guarita_api1
+    restart: unless-stopped
     volumes:
       - ./resources/config.edn:/app/resources/config.edn
     deploy:
@@ -26,6 +30,8 @@ services:
 
   api2:
     image: ghcr.io/macielti/guarita:main
+    container_name: guarita_api2
+    restart: unless-stopped
     volumes:
       - ./resources/config.edn:/app/resources/config.edn
     deploy:
