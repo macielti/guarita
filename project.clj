@@ -54,6 +54,7 @@
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
                                                     "-O3"
+                                                    "-march=x86-64-v1"
                                                     "--report-unsupported-elements-at-runtime"
 
                                                     "--initialize-at-build-time"
