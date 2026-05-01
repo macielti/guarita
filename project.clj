@@ -51,6 +51,7 @@
 
                                     "native"       ["shell"
                                                     "native-image"
+                                                    "--gc=G1"
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
                                                     "-march=compatibility"
