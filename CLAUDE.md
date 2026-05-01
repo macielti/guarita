@@ -32,22 +32,26 @@ Assembled in `src/guarita/components.clj` under the `arranjo` map. Components: c
 
 ### Route registration
 
-Routes live in `src/guarita/diplomat/http_server.clj`. Import and alias `io.pedestal.service.interceptors`, then each route uses:
-1. `pedestal.service.interceptors/json-body` — parses JSON body.
-2. `service.interceptors/wire-in-body-schema` — validates body against `wire.in.*` schema.
+Routes live in `src/guarita/diplomat/http_server.clj`. Each route uses interceptors in this order:
+1. `io.pedestal.http.body-params/body-params` — parses request body (JSON, EDN, Transit), populates `:json-params`.
+2. `io.pedestal.service.interceptors/json-body` — serializes response body to JSON.
 3. Handler fn.
 
 Example:
 ```clojure
-(:require [io.pedestal.service.interceptors :as pedestal.service.interceptors]
+(:require [io.pedestal.http.body-params :as body-params]
+          [io.pedestal.service.interceptors :as pedestal.service.interceptors]
           [service.interceptors])
 
 ["/endpoint"
- :post [pedestal.service.interceptors/json-body
+ :post [(body-params/body-params)
+        pedestal.service.interceptors/json-body
         (service.interceptors/wire-in-body-schema {:key schema/Schema})
         handler/fn!]
  :route-name :endpoint]
 ```
+
+The handler destructures `:json-params` and `:components` from the context map.
 
 ### Config
 

@@ -9,7 +9,7 @@
 
   :dependencies [[org.clojure/clojure "1.12.4"]
                  [com.clojure-goes-fast/clj-async-profiler "2.0.0-beta1"]
-                 [net.clojars.macielti/service "0.3.8"]
+                 [net.clojars.macielti/service "1.0.0"]
                  [net.clojars.macielti/common-clj "46.2.0"]
                  [io.pedestal/pedestal.service "0.8.1"]
                  [io.pedestal/pedestal.jetty "0.8.1"]
