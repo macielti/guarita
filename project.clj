@@ -54,7 +54,7 @@
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
                                                     "-O3"
-                                                    "-march=x86-64-v1"
+                                                    "-march=compatibility"
                                                     "--report-unsupported-elements-at-runtime"
 
                                                     "--initialize-at-build-time"
@@ -66,9 +66,6 @@
                                                     "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
                                                     "-H:+UnlockExperimentalVMOptions"
                                                     "-H:+StaticExecutableWithDynamicLibC"
-                                                    "-R:MaxHeapSize=120m"
-                                                    "-R:MinHeapSize=4m"
-                                                    "-R:+ExitOnOutOfMemoryError"
                                                     "-H:Name=./target/${:name}"]}}}
 
   :main guarita.components)
