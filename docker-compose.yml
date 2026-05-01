@@ -21,7 +21,7 @@ services:
     container_name: guarita_api1
     restart: unless-stopped
     volumes:
-      - ./resources/config.edn:/app/resources/config.edn
+      - ./config.edn:/app/resources/config.edn
     deploy:
       resources:
         limits:
@@ -33,7 +33,7 @@ services:
     container_name: guarita_api2
     restart: unless-stopped
     volumes:
-      - ./resources/config.edn:/app/resources/config.edn
+      - ./config.edn:/app/resources/config.edn
     deploy:
       resources:
         limits:
