@@ -162,7 +162,7 @@
   cluster scan is a tight loop over a flat slice of the mmap."
   [{:keys [^ByteBuffer labels ^floats centroids ^ints offsets ^long nlist] :as dataset}
    ^floats query ^long k ^long nprobe]
-  (let [clusters (topn-clusters centroids nlist query nprobe)]
+  (let [^ints clusters (topn-clusters centroids nlist query nprobe)]
     (loop [ci 0 acc []]
       (if (< ci nprobe)
         (let [cid (aget clusters ci)]

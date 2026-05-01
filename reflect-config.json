@@ -32,5 +32,12 @@
   {
     "name": "java.time.Duration",
     "allPublicMethods": true
+  },
+  {
+    "name": "clojure.lang.RT",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   }
 ]
