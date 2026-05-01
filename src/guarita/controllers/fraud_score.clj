@@ -15,7 +15,7 @@
         mcc-risk      (config/mcc-risk config)
         query         (-> (logic.fraud-score/vectorized input normalization mcc-risk)
                           float-array)
-        neighbors     (dataset/knn-parallel dataset query k)
+        neighbors     (dataset/knn dataset query k)
         fraud-count   (count (filter #(= :fraud (:label %)) neighbors))
         score         (/ (double fraud-count) k)]
     {:approved    (< score threshold)

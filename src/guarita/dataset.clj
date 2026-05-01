@@ -69,7 +69,7 @@
                   (recur (inc j) max-d max-pos))
                 (aset worst 0 max-pos)))))
         (recur (inc i))))
-    (map (fn [idx d] {:index idx :sq-dist d}) top-idx top-dist)))
+    (mapv (fn [idx d] {:index idx :sq-dist d}) top-idx top-dist)))
 
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
