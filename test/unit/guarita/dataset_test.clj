@@ -9,7 +9,8 @@
 (def ds
   (ig/init-key :guarita.dataset/dataset
                {:vectors-path "resources/vectors.bin"
-                :labels-path  "resources/labels.bin"}))
+                :labels-path  "resources/labels.bin"
+                :ivf-path     "resources/ivf.bin"}))
 
 (defn- vector-at [^FloatBuffer vectors ^long i]
   (let [start (int (* i 14))
@@ -50,20 +51,19 @@
     (let [distances (map :distance (dataset/knn ds query 5))]
       (is (apply <= distances)))))
 
-;; ---- knn-parallel tests ----
+;; ---- knn-ivf tests ----
 
-(s/deftest knn-parallel-returns-k-results-test
+(s/deftest knn-ivf-returns-k-results-test
   (testing "it should return exactly k results"
-    (let [result (dataset/knn-parallel ds query 5)]
+    (let [result (dataset/knn-ivf ds query 5 8)]
       (is (match? 5 (count result))))))
 
-(s/deftest knn-parallel-exact-match-has-zero-distance-test
+(s/deftest knn-ivf-exact-match-has-zero-distance-test
   (testing "it should return index 0 with distance 0.0 as the closest when querying its own vector"
-    (let [result (dataset/knn-parallel ds query 5)]
+    (let [result (dataset/knn-ivf ds query 5 8)]
       (is (match? expected-exact-match (take 1 result))))))
 
-(s/deftest knn-parallel-matches-sequential-test
-  (testing "it should return the same results as the sequential knn"
-    (let [sequential (dataset/knn ds query 5)
-          parallel   (dataset/knn-parallel ds query 5)]
-      (is (match? sequential parallel)))))
+(s/deftest knn-ivf-results-have-expected-shape-test
+  (testing "it should return results with :index, :distance and :label keys"
+    (let [result (dataset/knn-ivf ds query 5 8)]
+      (is (match? (repeat 5 expected-result-shape) result)))))

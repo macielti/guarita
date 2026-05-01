@@ -19,7 +19,8 @@
    {::component.config/config  {:path "resources/config.example.edn"
                                 :env  :test}}
    {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
-                              :labels-path  "resources/labels.bin"}}
+                              :labels-path  "resources/labels.bin"
+                              :ivf-path     "resources/ivf.bin"}}
    {::component.routes/routes  {:routes diplomat.http-server/routes}}
    {::component.service/service {:components (merge components-test
                                                     {:routes (ig/ref ::component.routes/routes)})}}))

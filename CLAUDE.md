@@ -55,20 +55,20 @@ Environment-keyed in `resources/config.edn`; running env (`:prod`) is selected i
 
 ### Reference data
 
-`resources/vectors.bin` and `resources/labels.bin` are the k-NN reference dataset used by the fraud-scoring controller. They are **generated at Docker build time** and are not checked into git.
+`resources/vectors.bin`, `resources/labels.bin`, and `resources/ivf.bin` are the k-NN reference dataset used by the fraud-scoring controller. They are **generated at Docker build time** and are not checked into git.
 
 - **Source**: [`references.json.gz`](https://github.com/zanfranceschi/rinha-de-backend-2026/blob/main/resources/references.json.gz) from the rinha-de-backend-2026 repo.
-- **`vectors.bin`** — N × 14 matrix of `float32` values in little-endian byte order. Each row is one reference transaction's `FraudScoreVector` (the same 14 features produced by `logic.fraud-score/vectorized`).
-- **`labels.bin`** — N bytes of `uint8`. One byte per row: `0` = legit, `1` = fraud.
+- **`vectors.bin`** — N × 14 matrix of `float32` values in little-endian byte order. Each row is one reference transaction's `FraudScoreVector` (the same 14 features produced by `logic.fraud-score/vectorized`). **Cluster-contiguous**: rows are sorted by IVF cluster id so that all points belonging to cluster `c` occupy a flat slice `[offsets[c], offsets[c+1])`.
+- **`labels.bin`** — N bytes of `uint8`, in the same row order as `vectors.bin`. One byte per row: `0` = legit, `1` = fraud.
+- **`ivf.bin`** — IVF (Inverted File) index. Header: `IVF1` magic (uint32 LE = `0x31465649`), `nlist` (int32 LE), `ntotal` (int32 LE), `dim` (int32 LE). Body: `nlist * dim` float32 LE centroids (row-major, in cluster-id order), then `nlist + 1` int32 LE offsets into `vectors.bin` (cumulative cluster counts).
 
 To regenerate locally (needed for `lein run` / `lein test`):
 ```
+pip install numpy scikit-learn
 python3 scripts/generate_dataset.py
 ```
 
-Reading the files at runtime: load `vectors.bin` as a flat `float32` array and reshape to `(n-rows, 14)`; read `labels.bin` byte-by-byte. Row `i` in `vectors.bin` corresponds to byte `i` in `labels.bin`.
-
-KNN search is implemented in `guarita.dataset` as `knn` (sequential) and `knn-parallel` (splits across all CPU cores via `pmap`). `knn-parallel` is the faster implementation and should be used in the controller.
+KNN search lives in `guarita.dataset`. The production path is `knn-ivf` — it scans only the `nprobe` clusters whose centroids are nearest the query, then merges per-cluster top-k results. `nprobe` is a query-time tunable (currently a `def` in `controllers/fraud_score.clj`); higher values trade latency for recall. `knn` (sequential brute force over all N vectors) is kept for recall comparisons and testing.
 
 ## Conventions / gotchas
 
