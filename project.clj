@@ -1,65 +1,70 @@
 (defproject guarita "0.1.0-SNAPSHOT"
 
-            :description "FIXME: write description"
+  :description "FIXME: write description"
 
-            :url "http://example.com/FIXME"
+  :url "http://example.com/FIXME"
 
-            :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
-                      :url  "https://www.eclipse.org/legal/epl-2.0/"}
+  :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
+            :url  "https://www.eclipse.org/legal/epl-2.0/"}
 
-            :dependencies [[org.clojure/clojure "1.12.4"]
-                           [net.clojars.macielti/service "0.3.8"]
-                           [net.clojars.macielti/common-clj "46.2.0"]
-                           [io.pedestal/pedestal.service "0.8.1"]
-                           [io.pedestal/pedestal.jetty "0.8.1"]
-                           [io.pedestal/pedestal.error "0.8.1"]
-                           [io.pedestal/pedestal.interceptor "0.8.1"]
-                           [com.taoensso/timbre "6.8.0"]
+  :dependencies [[org.clojure/clojure "1.12.4"]
+                 #_[com.clojure-goes-fast/clj-async-profiler "2.0.0-beta1"]
+                 [net.clojars.macielti/service "0.3.8"]
+                 [net.clojars.macielti/common-clj "46.2.0"]
+                 [io.pedestal/pedestal.service "0.8.1"]
+                 [io.pedestal/pedestal.jetty "0.8.1"]
+                 [io.pedestal/pedestal.error "0.8.1"]
+                 [io.pedestal/pedestal.interceptor "0.8.1"]
+                 [com.taoensso/timbre "6.8.0"]
 
-                           ;GraalVM native image building
-                           [com.github.clj-easy/graal-build-time "1.0.5"]]
+                 ;GraalVM native image building
+                 [com.github.clj-easy/graal-build-time "1.0.5"]]
 
-            :resource-paths ["resources"]
+  #_:jvm-opts #_["-Djdk.attach.allowAttachSelf" "-XX:+UnlockDiagnosticVMOptions" "-XX:+DebugNonSafepoints"]
 
-            :profiles {:dev {:plugins [[lein-shell "0.5.0"]
-                                       [com.github.liquidz/antq "RELEASE"]
-                                       [com.github.clojure-lsp/lein-clojure-lsp "2.0.14"]]
+  :resource-paths ["resources"]
 
-                             :resource-paths ["test/resources"]
+  :aot [guarita.components guarita.diplomat.http-server]
 
-                             :test-paths     ["test/unit" "test/integration" "test/helpers"]
+  :profiles {:dev {:plugins        [[lein-shell "0.5.0"]
+                                    [com.github.liquidz/antq "RELEASE"]
+                                    [com.github.clojure-lsp/lein-clojure-lsp "2.0.14"]]
 
-                             :dependencies   [[net.clojars.macielti/common-test-clj "7.1.1"]
-                                              [http-kit.fake/http-kit.fake "0.2.2"]
-                                              [nubank/matcher-combinators "3.10.0"]
-                                              [hashp "0.2.2"]]
+                   :resource-paths ["test/resources"]
 
-                             :injections     [(require 'hashp.core)]
+                   :test-paths     ["test/unit" "test/integration" "test/helpers"]
 
-                             :aliases        {"clean-ns"     ["clojure-lsp" "clean-ns" "--dry"] ;; check if namespaces are clean
-                                              "format"       ["clojure-lsp" "format" "--dry"] ;; check if namespaces are formatted
-                                              "diagnostics"  ["clojure-lsp" "diagnostics"] ;; check if project has any diagnostics (clj-kondo findings)
-                                              "lint"         ["do" ["clean-ns"] ["format"] ["diagnostics"]] ;; check all above
-                                              "clean-ns-fix" ["clojure-lsp" "clean-ns"] ;; Fix namespaces not clean
-                                              "format-fix"   ["clojure-lsp" "format"] ;; Fix namespaces not formatted
-                                              "lint-fix"     ["do" ["clean-ns-fix"] ["format-fix"]] ;; Fix both
+                   :dependencies   [[net.clojars.macielti/common-test-clj "7.1.1"]
+                                    [http-kit.fake/http-kit.fake "0.2.2"]
+                                    [nubank/matcher-combinators "3.10.0"]
+                                    [hashp "0.2.2"]]
 
-                                              "native"       ["shell"
-                                                              "native-image"
-                                                              "--no-fallback"
-                                                              "--enable-url-protocols=http,https"
-                                                              "-march=compatibility"
-                                                              "--report-unsupported-elements-at-runtime"
+                   :injections     [(require 'hashp.core)]
 
-                                                              "--initialize-at-build-time"
-                                                              "--initialize-at-run-time=io.prometheus.client.Striped64"
+                   :aliases        {"clean-ns"     ["clojure-lsp" "clean-ns" "--dry"] ;; check if namespaces are clean
+                                    "format"       ["clojure-lsp" "format" "--dry"] ;; check if namespaces are formatted
+                                    "diagnostics"  ["clojure-lsp" "diagnostics"] ;; check if project has any diagnostics (clj-kondo findings)
+                                    "lint"         ["do" ["clean-ns"] ["format"] ["diagnostics"]] ;; check all above
+                                    "clean-ns-fix" ["clojure-lsp" "clean-ns"] ;; Fix namespaces not clean
+                                    "format-fix"   ["clojure-lsp" "format"] ;; Fix namespaces not formatted
+                                    "lint-fix"     ["do" ["clean-ns-fix"] ["format-fix"]] ;; Fix both
 
-                                                              "-H:ReflectionConfigurationFiles=reflect-config.json"
-                                                              "--features=clj_easy.graal_build_time.InitClojureClasses"
-                                                              "-Dio.pedestal.log.defaultMetricsRecorder=nil"
-                                                              "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
-                                                              "-H:+UnlockExperimentalVMOptions"
-                                                              "-H:+StaticExecutableWithDynamicLibC"
-                                                              "-H:Name=./target/${:name}"]}}}
+                                    "native"       ["shell"
+                                                    "native-image"
+                                                    "--no-fallback"
+                                                    "--enable-url-protocols=http,https"
+                                                    "-march=compatibility"
+                                                    "--report-unsupported-elements-at-runtime"
 
-            :main guarita.components)
+                                                    "--initialize-at-build-time"
+                                                    "--initialize-at-run-time=io.prometheus.client.Striped64"
+
+                                                    "-H:ReflectionConfigurationFiles=reflect-config.json"
+                                                    "--features=clj_easy.graal_build_time.InitClojureClasses"
+                                                    "-Dio.pedestal.log.defaultMetricsRecorder=nil"
+                                                    "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
+                                                    "-H:+UnlockExperimentalVMOptions"
+                                                    "-H:+StaticExecutableWithDynamicLibC"
+                                                    "-H:Name=./target/${:name}"]}}}
+
+  :main guarita.components)

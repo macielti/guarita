@@ -75,11 +75,12 @@
   (doseq [h handles] (.close h)))
 
 (defn- sq-dist-buf
-  ^double [^FloatBuffer vectors ^floats query ^long i]
+  ^double [^FloatBuffer vectors ^floats query ^long i ^floats scratch]
   (let [start (int (* i 14))]
+    (.get vectors start scratch 0 14)
     (loop [k 0 acc 0.0]
       (if (< k 14)
-        (let [diff (- (double (.get vectors (+ start k)))
+        (let [diff (- (double (aget scratch k))
                       (double (aget query k)))]
           (recur (inc k) (+ acc (* diff diff))))
         acc))))
@@ -117,42 +118,49 @@
         (recur (inc c))))
     top-id))
 
-(defn- knn-range
-  [dataset query k start end]
+(defn- knn-range!
+  [dataset ^floats query ^long k range-and-buffers]
   (let [^FloatBuffer vectors (:vectors dataset)
-        ^floats query  query
-        k     (long k)
-        start (long start)
-        end   (long end)
-        top-idx  (long-array k Long/MAX_VALUE)
-        top-dist (double-array k Double/POSITIVE_INFINITY)
-        worst    (int-array 1 0)]
+        scratch (float-array 14)
+        ^long start (:start range-and-buffers)
+        ^long end (:end range-and-buffers)
+        ^longs top-idx (:top-idx range-and-buffers)
+        ^doubles top-dist (:top-dist range-and-buffers)
+        ^ints worst (:worst range-and-buffers)]
     (loop [i start]
       (when (< i end)
-        (let [d (sq-dist-buf vectors query i)]
+        (let [d (sq-dist-buf vectors query i scratch)]
           (when (< d (aget top-dist (aget worst 0)))
             (aset top-idx  (aget worst 0) (long i))
             (aset top-dist (aget worst 0) d)
             (update-worst! top-dist worst k)))
-        (recur (inc i))))
-    (mapv (fn [idx d] {:index idx :sq-dist d}) top-idx top-dist)))
+        (recur (inc i))))))
 
 (defn- finalize-results
-  [^ByteBuffer labels candidates k]
-  (->> candidates
-       (sort-by :sq-dist)
-       (take k)
-       (mapv (fn [{:keys [index sq-dist]}]
-               {:index    index
-                :distance (Math/sqrt sq-dist)
-                :label    (case (long (.get labels (int index)))
-                            0 :legit
-                            1 :fraud)}))))
+  [^ByteBuffer labels ^longs top-idx ^doubles top-dist ^long k]
+  (let [k (int k)]
+    (->> (range k)
+         (keep (fn [i]
+                 (let [d (aget top-dist i)]
+                   (when (< d Double/POSITIVE_INFINITY)
+                     [(aget top-idx i) d]))))
+         (sort-by second)
+         (mapv (fn [[^long idx ^double sq-dist]]
+                 {:index    idx
+                  :distance (Math/sqrt sq-dist)
+                  :label    (case (long (.get labels (int idx)))
+                              0 :legit
+                              1 :fraud)})))))
 
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
   [{:keys [^ByteBuffer labels ^long n] :as dataset} ^floats query ^long k]
-  (vec (finalize-results labels (knn-range dataset query k 0 n) k)))
+  (let [top-idx  (long-array k Long/MAX_VALUE)
+        top-dist (double-array k Double/POSITIVE_INFINITY)
+        worst    (int-array 1 0)
+        buffers  {:start 0 :end n :top-idx top-idx :top-dist top-dist :worst worst}]
+    (knn-range! dataset query k buffers)
+    (vec (finalize-results labels top-idx top-dist k))))
 
 (defn knn-ivf
   "IVF-based k-NN: scans only the nprobe clusters whose centroids are nearest
@@ -160,13 +168,19 @@
   cluster scan is a tight loop over a flat slice of the mmap."
   [{:keys [^ByteBuffer labels ^floats centroids ^ints offsets ^long nlist] :as dataset}
    ^floats query ^long k ^long nprobe]
-  (let [^ints clusters (topn-clusters centroids nlist query nprobe)]
-    (loop [ci 0 acc []]
-      (if (< ci nprobe)
+  (let [^ints clusters (topn-clusters centroids nlist query nprobe)
+        top-idx  (long-array k Long/MAX_VALUE)
+        top-dist (double-array k Double/POSITIVE_INFINITY)
+        worst    (int-array 1 0)]
+    (loop [ci 0]
+      (when (< ci nprobe)
         (let [cid (aget clusters ci)]
-          (if (>= cid 0)
-            (let [start (aget offsets cid)
-                  end   (aget offsets (inc cid))]
-              (recur (inc ci) (into acc (knn-range dataset query k start end))))
-            (recur (inc ci) acc)))
-        (vec (finalize-results labels acc k))))))
+          (when (>= cid 0)
+            (let [buffers {:start (aget offsets cid)
+                           :end (aget offsets (inc cid))
+                           :top-idx top-idx
+                           :top-dist top-dist
+                           :worst worst}]
+              (knn-range! dataset query k buffers))))
+        (recur (inc ci))))
+    (vec (finalize-results labels top-idx top-dist k))))

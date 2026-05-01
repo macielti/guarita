@@ -89,8 +89,8 @@
    {:keys [max-merchant-avg-amount]} :- models.normalization/Normalization]
   (clamp (/ avg-amount max-merchant-avg-amount)))
 
-(def ^:private mcc-risk-score
-  (memoize (fn [mcc mcc-risk] (get mcc-risk mcc 0.5))))
+(defn- mcc-risk-score [mcc mcc-risk]
+  (get mcc-risk mcc 0.5))
 
 (s/defn normalize-mcc-risk :- s/Num
   [{:keys [mcc]} :- models.merchant/Merchant
