@@ -119,14 +119,14 @@
     top-id))
 
 (defn- knn-range!
-  [dataset ^floats query ^long k range-and-buffers]
+  [dataset query k start end scratch]
   (let [^FloatBuffer vectors (:vectors dataset)
-        scratch (float-array 14)
-        ^long start (:start range-and-buffers)
-        ^long end (:end range-and-buffers)
-        ^longs top-idx (:top-idx range-and-buffers)
-        ^doubles top-dist (:top-dist range-and-buffers)
-        ^ints worst (:worst range-and-buffers)]
+        ^long k k
+        ^long start start
+        ^long end end
+        ^longs top-idx (:top-idx dataset)
+        ^doubles top-dist (:top-dist dataset)
+        ^ints worst (:worst dataset)]
     (loop [i start]
       (when (< i end)
         (let [d (sq-dist-buf vectors query i scratch)]
@@ -138,19 +138,20 @@
 
 (defn- finalize-results
   [^ByteBuffer labels ^longs top-idx ^doubles top-dist ^long k]
-  (let [k (int k)]
-    (->> (range k)
-         (keep (fn [i]
-                 (let [d (aget top-dist i)]
-                   (when (< d Double/POSITIVE_INFINITY)
-                     [(aget top-idx i) d]))))
-         (sort-by second)
-         (mapv (fn [[^long idx ^double sq-dist]]
-                 {:index    idx
-                  :distance (Math/sqrt sq-dist)
-                  :label    (case (long (.get labels (int idx)))
-                              0 :legit
-                              1 :fraud)})))))
+  (let [pairs (java.util.ArrayList.)]
+    (dotimes [i k]
+      (let [d (aget top-dist i)]
+        (when (< d Double/POSITIVE_INFINITY)
+          (.add pairs (object-array [(aget top-idx i) d])))))
+    (.sort pairs (java.util.Comparator/comparingDouble (fn [^objects p] (aget p 1))))
+    (mapv (fn [^objects p]
+            (let [idx (long (aget p 0))]
+              {:index    idx
+               :distance (Math/sqrt (double (aget p 1)))
+               :label    (case (long (.get labels (int idx)))
+                           0 :legit
+                           1 :fraud)}))
+          pairs)))
 
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
@@ -158,8 +159,9 @@
   (let [top-idx  (long-array k Long/MAX_VALUE)
         top-dist (double-array k Double/POSITIVE_INFINITY)
         worst    (int-array 1 0)
-        buffers  {:start 0 :end n :top-idx top-idx :top-dist top-dist :worst worst}]
-    (knn-range! dataset query k buffers)
+        scratch  (float-array 14)
+        dataset' (assoc dataset :top-idx top-idx :top-dist top-dist :worst worst)]
+    (knn-range! dataset' query k 0 n scratch)
     (vec (finalize-results labels top-idx top-dist k))))
 
 (defn knn-ivf
@@ -171,16 +173,14 @@
   (let [^ints clusters (topn-clusters centroids nlist query nprobe)
         top-idx  (long-array k Long/MAX_VALUE)
         top-dist (double-array k Double/POSITIVE_INFINITY)
-        worst    (int-array 1 0)]
+        worst    (int-array 1 0)
+        scratch  (float-array 14)
+        dataset' (assoc dataset :top-idx top-idx :top-dist top-dist :worst worst)]
     (loop [ci 0]
       (when (< ci nprobe)
         (let [cid (aget clusters ci)]
           (when (>= cid 0)
-            (let [buffers {:start (aget offsets cid)
-                           :end (aget offsets (inc cid))
-                           :top-idx top-idx
-                           :top-dist top-dist
-                           :worst worst}]
-              (knn-range! dataset query k buffers))))
+            (knn-range! dataset' query k
+                        (aget offsets cid) (aget offsets (inc cid)) scratch)))
         (recur (inc ci))))
     (vec (finalize-results labels top-idx top-dist k))))

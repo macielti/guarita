@@ -1,6 +1,5 @@
 (ns guarita.logic.fraud-score
   (:require [guarita.models.customer :as models.customer]
-            [guarita.models.fraud-score :as models.fraud-score]
             [guarita.models.mcc :as models.mcc]
             [guarita.models.merchant :as models.merchant]
             [guarita.models.normalization :as models.normalization]
@@ -97,21 +96,21 @@
    mcc-risk      :- models.mcc/MccRisk]
   (mcc-risk-score mcc mcc-risk))
 
-(s/defn vectorized :- models.fraud-score/FraudScoreVector
-  [{:keys [transaction customer merchant terminal last-transaction]} :- models.fraud-score/FraudScore
-   normalization :- models.normalization/Normalization
-   mcc-risk      :- models.mcc/MccRisk]
-  [(normalize-amount transaction normalization)
-   (normalize-installments transaction normalization)
-   (normalize-amount-vs-avg transaction customer normalization)
-   (normalize-hour-of-day transaction)
-   (normalize-day-of-week transaction)
-   (normalize-minutes-since-last-tx transaction last-transaction normalization)
-   (normalize-km-from-last-tx last-transaction normalization)
-   (normalize-km-from-home terminal normalization)
-   (normalize-tx-count-24h customer normalization)
-   (normalize-is-online terminal)
-   (normalize-card-present terminal)
-   (normalize-unknown-merchant merchant customer)
-   (normalize-mcc-risk merchant mcc-risk)
-   (normalize-merchant-avg-amount merchant normalization)])
+(defn vectorized
+  [{:keys [transaction customer merchant terminal last-transaction]}
+   normalization mcc-risk]
+  (float-array
+   [(normalize-amount transaction normalization)
+    (normalize-installments transaction normalization)
+    (normalize-amount-vs-avg transaction customer normalization)
+    (normalize-hour-of-day transaction)
+    (normalize-day-of-week transaction)
+    (normalize-minutes-since-last-tx transaction last-transaction normalization)
+    (normalize-km-from-last-tx last-transaction normalization)
+    (normalize-km-from-home terminal normalization)
+    (normalize-tx-count-24h customer normalization)
+    (normalize-is-online terminal)
+    (normalize-card-present terminal)
+    (normalize-unknown-merchant merchant customer)
+    (normalize-mcc-risk merchant mcc-risk)
+    (normalize-merchant-avg-amount merchant normalization)]))

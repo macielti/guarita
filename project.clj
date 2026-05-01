@@ -8,7 +8,7 @@
             :url  "https://www.eclipse.org/legal/epl-2.0/"}
 
   :dependencies [[org.clojure/clojure "1.12.4"]
-                 #_[com.clojure-goes-fast/clj-async-profiler "2.0.0-beta1"]
+                 [com.clojure-goes-fast/clj-async-profiler "2.0.0-beta1"]
                  [net.clojars.macielti/service "0.3.8"]
                  [net.clojars.macielti/common-clj "46.2.0"]
                  [io.pedestal/pedestal.service "0.8.1"]
@@ -20,7 +20,7 @@
                  ;GraalVM native image building
                  [com.github.clj-easy/graal-build-time "1.0.5"]]
 
-  #_:jvm-opts #_["-Djdk.attach.allowAttachSelf" "-XX:+UnlockDiagnosticVMOptions" "-XX:+DebugNonSafepoints"]
+  :jvm-opts ["-Djdk.attach.allowAttachSelf" "-XX:+UnlockDiagnosticVMOptions" "-XX:+DebugNonSafepoints"]
 
   :resource-paths ["resources"]
 
