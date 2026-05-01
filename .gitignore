@@ -19,3 +19,4 @@ pom.xml.asc
 /.lsp/.cache/
 /resources/vectors.bin
 /resources/labels.bin
+/resources/ivf.bin
