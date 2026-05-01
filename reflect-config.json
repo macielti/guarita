@@ -34,6 +34,10 @@
     "allPublicMethods": true
   },
   {
+    "name": "java.time.format.DateTimeFormatter",
+    "allPublicMethods": true
+  },
+  {
     "name": "clojure.lang.RT",
     "allDeclaredMethods": true,
     "allPublicMethods": true,
