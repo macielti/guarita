@@ -51,7 +51,6 @@
 
                                     "native"       ["shell"
                                                     "native-image"
-                                                    "--gc=G1"
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
                                                     "-march=compatibility"
@@ -66,6 +65,9 @@
                                                     "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
                                                     "-H:+UnlockExperimentalVMOptions"
                                                     "-H:+StaticExecutableWithDynamicLibC"
+                                                    "-R:MaxHeapSize=120m"
+                                                    "-R:MinHeapSize=4m"
+                                                    "-R:+ExitOnOutOfMemoryError"
                                                     "-H:Name=./target/${:name}"]}}}
 
   :main guarita.components)

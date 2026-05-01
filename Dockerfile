@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir numpy scikit-learn
 
 RUN mkdir -p resources && python3 scripts/generate_dataset.py
 
-FROM --platform=linux/amd64 container-registry.oracle.com/graalvm/native-image:23 AS build
+FROM --platform=linux/amd64 container-registry.oracle.com/graalvm/native-image:25 AS build
 
 RUN curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
     chmod +x lein && \
