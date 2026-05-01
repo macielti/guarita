@@ -6,7 +6,7 @@
             [schema.core :as s]))
 
 (def ^:private k 5)
-(def ^:private nprobe 8)
+(def ^:private nprobe 4)
 (def ^:private threshold 0.6)
 
 (s/defn fraud-score! :- models.fraud-score/FraudScoreResult
