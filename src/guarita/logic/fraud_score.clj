@@ -9,8 +9,8 @@
             [schema.core :as s])
   (:import [java.time Duration ZoneOffset]))
 
-(defn- clamp [x]
-  (-> x double (max 0.0) (min 1.0)))
+(defn- clamp ^double [^double x]
+  (Math/min 1.0 (Math/max 0.0 x)))
 
 (s/defn normalize-amount :- s/Num
   [{:keys [amount]} :- models.transaction/Transaction
@@ -82,7 +82,7 @@
 (s/defn normalize-unknown-merchant :- s/Num
   [{:keys [id]}              :- models.merchant/Merchant
    {:keys [known-merchants]} :- models.customer/Customer]
-  (if (some #{id} known-merchants) 0 1))
+  (if (contains? known-merchants id) 0 1))
 
 (s/defn normalize-merchant-avg-amount :- s/Num
   [{:keys [avg-amount]}           :- models.merchant/Merchant

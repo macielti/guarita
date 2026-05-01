@@ -4,4 +4,4 @@
 (s/defschema Customer
   {:avg-amount      s/Num
    :tx-count-24h    s/Int
-   :known-merchants [s/Str]})
+   :known-merchants #{s/Str}})

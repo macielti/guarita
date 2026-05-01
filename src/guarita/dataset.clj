@@ -138,9 +138,10 @@
     (mapv (fn [idx d] {:index idx :sq-dist d}) top-idx top-dist)))
 
 (defn- finalize-results
-  [^ByteBuffer labels candidates]
+  [^ByteBuffer labels candidates k]
   (->> candidates
        (sort-by :sq-dist)
+       (take k)
        (mapv (fn [{:keys [index sq-dist]}]
                {:index    index
                 :distance (Math/sqrt sq-dist)
@@ -151,10 +152,7 @@
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
   [{:keys [^ByteBuffer labels ^long n] :as dataset} ^floats query ^long k]
-  (->> (knn-range dataset query k 0 n)
-       (finalize-results labels)
-       (take k)
-       vec))
+  (vec (finalize-results labels (knn-range dataset query k 0 n) k)))
 
 (defn knn-ivf
   "IVF-based k-NN: scans only the nprobe clusters whose centroids are nearest
@@ -171,7 +169,4 @@
                   end   (aget offsets (inc cid))]
               (recur (inc ci) (into acc (knn-range dataset query k start end))))
             (recur (inc ci) acc)))
-        (->> acc
-             (finalize-results labels)
-             (take k)
-             vec)))))
+        (vec (finalize-results labels acc k))))))

@@ -17,7 +17,7 @@
         query         (-> (logic.fraud-score/vectorized input normalization mcc-risk)
                           float-array)
         neighbors     (dataset/knn-ivf dataset query k nprobe)
-        fraud-count   (count (filter #(= :fraud (:label %)) neighbors))
+        fraud-count   (reduce (fn [n {:keys [label]}] (if (= :fraud label) (inc n) n)) 0 neighbors)
         score         (/ (double fraud-count) k)]
     {:approved    (< score threshold)
      :fraud_score score}))

@@ -7,4 +7,4 @@
   [{:keys [avg_amount tx_count_24h known_merchants]} :- wire.in.customer/Customer]
   {:avg-amount      avg_amount
    :tx-count-24h    tx_count_24h
-   :known-merchants known_merchants})
+   :known-merchants (set known_merchants)})

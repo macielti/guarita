@@ -146,8 +146,10 @@
 ;; normalize-unknown-merchant test fixtures
 (def merchant-known "merch-1")
 (def merchant-unknown "merch-9")
-(def known-merchants ["merch-1" "merch-2"])
-(def empty-known-merchants [])
+(def known-merchants-input ["merch-1" "merch-2"])
+(def empty-known-merchants-input [])
+(def known-merchants #{"merch-1" "merch-2"})
+(def empty-known-merchants #{})
 
 (def customer-with-known-merchants
   (helpers.schema/generate models.customer/Customer
@@ -724,7 +726,7 @@
   (helpers.schema/generate models.customer/Customer
                            {:avg-amount      81.28
                             :tx-count-24h    20
-                            :known-merchants ["MERC-008" "MERC-007" "MERC-005"]}
+                            :known-merchants #{"MERC-008" "MERC-007" "MERC-005"}}
                            {}))
 
 (def vectorized-spec-merchant
