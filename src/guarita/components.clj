@@ -1,6 +1,5 @@
 (ns guarita.components
-  (:require [clj-async-profiler.core :as prof]
-            [common-clj.integrant-components.config :as component.config]
+  (:require [common-clj.integrant-components.config :as component.config]
             [common-clj.integrant-components.routes :as component.routes]
             [guarita.dataset]
             [guarita.diplomat.http-server :as diplomat.http-server]

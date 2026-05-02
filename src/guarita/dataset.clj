@@ -11,6 +11,46 @@
 (def ^:private ivf-magic 0x31465649)
 (def ^:private ivf-header-bytes 16)
 
+(deftype KnnScratch [^longs top-idx
+                     ^doubles top-dist
+                     ^ints worst
+                     ^ints cl-ids
+                     ^doubles cl-dist
+                     ^ints cl-worst
+                     ^floats vec-scratch])
+
+(defn- make-knn-scratch ^KnnScratch [^long k ^long nprobe]
+  (KnnScratch.
+   (long-array k Long/MAX_VALUE)
+   (double-array k Double/POSITIVE_INFINITY)
+   (int-array 1 0)
+   (int-array nprobe -1)
+   (double-array nprobe Double/POSITIVE_INFINITY)
+   (int-array 1 0)
+   (float-array 14)))
+
+;; Default sized for k≤8, nprobe≤16 — covers all current callers without realloc.
+(def ^:private ^ThreadLocal tl-knn-scratch
+  (ThreadLocal/withInitial
+   (reify java.util.function.Supplier
+     (get [_] (atom (make-knn-scratch 8 16))))))
+
+(defn- acquire-scratch! ^KnnScratch [^long k ^long nprobe]
+  (let [cell (.get tl-knn-scratch)
+        ^KnnScratch s @cell]
+    (if (and (>= (alength ^longs (.top-idx s)) k)
+             (>= (alength ^ints (.cl-ids s)) nprobe))
+      (do (java.util.Arrays/fill ^longs   (.top-idx  s) Long/MAX_VALUE)
+          (java.util.Arrays/fill ^doubles (.top-dist s) Double/POSITIVE_INFINITY)
+          (aset ^ints (.worst    s) 0 (int 0))
+          (java.util.Arrays/fill ^ints    (.cl-ids   s) (int -1))
+          (java.util.Arrays/fill ^doubles (.cl-dist  s) Double/POSITIVE_INFINITY)
+          (aset ^ints (.cl-worst s) 0 (int 0))
+          s)
+      (let [ns (make-knn-scratch k nprobe)]
+        (reset! cell ns)
+        ns))))
+
 (defn- mmap-read-only [^String path]
   (let [f  (RandomAccessFile. path "r")
         ch (.getChannel f)
@@ -102,36 +142,40 @@
         (recur (inc j) max-d max-pos))
       (aset worst 0 (int max-pos)))))
 
-(defn- topn-clusters
-  "Returns int-array of the nprobe cluster ids closest to query."
-  ^ints [^floats centroids ^long nlist ^floats query ^long nprobe]
-  (let [top-id   (int-array nprobe -1)
-        top-dist (double-array nprobe Double/POSITIVE_INFINITY)
-        worst    (int-array 1 0)]
+(defn- topn-clusters! [centroids nlist query nprobe s]
+  (let [^floats centroids centroids
+        ^long nlist nlist
+        ^floats query query
+        ^long nprobe nprobe
+        ^KnnScratch s s
+        ^doubles cl-dist (.cl-dist s)
+        ^ints cl-worst (.cl-worst s)
+        ^ints cl-ids (.cl-ids s)]
     (loop [c 0]
       (when (< c nlist)
         (let [d (sq-dist-arr centroids (* c 14) query)]
-          (when (< d (aget top-dist (aget worst 0)))
-            (aset top-id   (aget worst 0) (int c))
-            (aset top-dist (aget worst 0) d)
-            (update-worst! top-dist worst nprobe)))
-        (recur (inc c))))
-    top-id))
+          (when (< d (aget cl-dist (aget cl-worst 0)))
+            (aset cl-ids (aget cl-worst 0) (int c))
+            (aset cl-dist (aget cl-worst 0) d)
+            (update-worst! cl-dist cl-worst nprobe)))
+        (recur (inc c))))))
 
-(defn- knn-range!
-  [dataset query k start end scratch]
-  (let [^FloatBuffer vectors (:vectors dataset)
+(defn- knn-range! [vectors query k start end s]
+  (let [^FloatBuffer vectors vectors
+        ^floats query query
         ^long k k
         ^long start start
         ^long end end
-        ^longs top-idx (:top-idx dataset)
-        ^doubles top-dist (:top-dist dataset)
-        ^ints worst (:worst dataset)]
+        ^KnnScratch s s
+        ^longs top-idx (.top-idx s)
+        ^doubles top-dist (.top-dist s)
+        ^ints worst (.worst s)
+        ^floats vec-scratch (.vec-scratch s)]
     (loop [i start]
       (when (< i end)
-        (let [d (sq-dist-buf vectors query i scratch)]
+        (let [d (sq-dist-buf vectors query i vec-scratch)]
           (when (< d (aget top-dist (aget worst 0)))
-            (aset top-idx  (aget worst 0) (long i))
+            (aset top-idx (aget worst 0) (long i))
             (aset top-dist (aget worst 0) d)
             (update-worst! top-dist worst k)))
         (recur (inc i))))))
@@ -155,32 +199,24 @@
 
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
-  [{:keys [^ByteBuffer labels ^long n] :as dataset} ^floats query ^long k]
-  (let [top-idx  (long-array k Long/MAX_VALUE)
-        top-dist (double-array k Double/POSITIVE_INFINITY)
-        worst    (int-array 1 0)
-        scratch  (float-array 14)
-        dataset' (assoc dataset :top-idx top-idx :top-dist top-dist :worst worst)]
-    (knn-range! dataset' query k 0 n scratch)
-    (vec (finalize-results labels top-idx top-dist k))))
+  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^long n]} ^floats query ^long k]
+  (let [^KnnScratch s (acquire-scratch! k 16)]
+    (knn-range! vectors query k 0 n s)
+    (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
 
 (defn knn-ivf
   "IVF-based k-NN: scans only the nprobe clusters whose centroids are nearest
   to the query. Vectors are stored cluster-contiguous in vectors.bin so each
   cluster scan is a tight loop over a flat slice of the mmap."
-  [{:keys [^ByteBuffer labels ^floats centroids ^ints offsets ^long nlist] :as dataset}
+  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
-  (let [^ints clusters (topn-clusters centroids nlist query nprobe)
-        top-idx  (long-array k Long/MAX_VALUE)
-        top-dist (double-array k Double/POSITIVE_INFINITY)
-        worst    (int-array 1 0)
-        scratch  (float-array 14)
-        dataset' (assoc dataset :top-idx top-idx :top-dist top-dist :worst worst)]
+  (let [^KnnScratch s (acquire-scratch! k nprobe)]
+    (topn-clusters! centroids nlist query nprobe s)
     (loop [ci 0]
       (when (< ci nprobe)
-        (let [cid (aget clusters ci)]
+        (let [cid (aget ^ints (.cl-ids s) ci)]
           (when (>= cid 0)
-            (knn-range! dataset' query k
-                        (aget offsets cid) (aget offsets (inc cid)) scratch)))
+            (knn-range! vectors query k
+                        (aget offsets cid) (aget offsets (inc cid)) s)))
         (recur (inc ci))))
-    (vec (finalize-results labels top-idx top-dist k))))
+    (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))

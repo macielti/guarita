@@ -49,11 +49,11 @@
                                     "clean-ns-fix" ["clojure-lsp" "clean-ns"] ;; Fix namespaces not clean
                                     "format-fix"   ["clojure-lsp" "format"] ;; Fix namespaces not formatted
                                     "lint-fix"     ["do" ["clean-ns-fix"] ["format-fix"]] ;; Fix both
-
                                     "native"       ["shell"
                                                     "native-image"
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
+                                                    "--pgo=default.iprof"
                                                     "-O3"
                                                     "-march=compatibility"
                                                     "--report-unsupported-elements-at-runtime"
