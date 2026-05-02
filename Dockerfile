@@ -28,13 +28,13 @@ COPY --from=k6 /usr/bin/k6 /usr/bin/k6
 
 RUN lein do clean, uberjar, native-pgo
 
-RUN ./target/guarita -XX:ProfilesDumpFile=./resources/profile-guided-optimizations/profile.iprof & \
+RUN mkdir -p ./resources/profile-guided-optimizations/ && \
+    ./target/guarita -XX:ProfilesDumpFile=./resources/profile-guided-optimizations/profile.iprof & \
     SERVER_PID=$! && \
     for i in $(seq 1 30); do curl -sf http://localhost:9999/ready && break || sleep 2; done && \
     k6 run ./resources/profile-guided-optimizations/test.js && \
     kill $SERVER_PID && \
-    wait $SERVER_PID || true && \
-    sleep 10
+    wait $SERVER_PID || true
 
 RUN lein do clean, uberjar, native
 
