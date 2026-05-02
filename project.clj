@@ -67,8 +67,6 @@
                                                     "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
                                                     "-H:+UnlockExperimentalVMOptions"
                                                     "-H:+StaticExecutableWithDynamicLibC"
-                                                    "-R:MaxHeapSize=120m"
-                                                    "-R:MinHeapSize=4m"
                                                     "-R:+ExitOnOutOfMemoryError"
                                                     "-H:Name=./target/${:name}"]}}}
 
