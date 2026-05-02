@@ -6,7 +6,7 @@
             [guarita.models.terminal :as models.terminal]
             [guarita.models.transaction :as models.transaction]
             [schema.core :as s])
-  (:import [java.time Duration ZoneOffset]))
+  (:import [java.time Duration Instant]))
 
 (defn- clamp ^double [^double x]
   (Math/min 1.0 (Math/max 0.0 x)))
@@ -29,18 +29,14 @@
 
 (s/defn normalize-hour-of-day :- s/Num
   [{:keys [requested-at]} :- models.transaction/Transaction]
-  (let [hour (-> requested-at
-                 (.atOffset ZoneOffset/UTC)
-                 (.getHour))]
+  (let [^Instant inst requested-at
+        hour         (-> inst .getEpochSecond (quot 3600) (mod 24))]
     (/ hour 23.0)))
 
 (s/defn normalize-day-of-week :- s/Num
   [{:keys [requested-at]} :- models.transaction/Transaction]
-  (let [day (-> requested-at
-                (.atOffset ZoneOffset/UTC)
-                (.getDayOfWeek)
-                (.getValue)
-                dec)]
+  (let [^Instant inst requested-at
+        day          (-> inst .getEpochSecond (quot 86400) (+ 3) (mod 7))]
     (/ day 6.0)))
 
 (s/defn normalize-minutes-since-last-tx :- s/Num
@@ -49,8 +45,8 @@
    {:keys [max-minutes]}  :- models.normalization/Normalization]
   (if (nil? last-transaction)
     -1
-    (let [minutes (-> (Duration/between (:timestamp last-transaction) requested-at)
-                      (.toMinutes))]
+    (let [^Duration dur (Duration/between (:timestamp last-transaction) requested-at)
+          minutes       (.toMinutes dur)]
       (clamp (/ minutes max-minutes)))))
 
 (s/defn normalize-km-from-last-tx :- s/Num
