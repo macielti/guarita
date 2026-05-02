@@ -36,6 +36,8 @@ RUN mkdir -p ./resources/profile-guided-optimizations/ && \
     kill $SERVER_PID && \
     wait $SERVER_PID || true
 
+RUN sleep 10 && echo "=== Contents of profile directory ===" && ls -la ./resources/profile-guided-optimizations/ && echo "=== Done ===" && pwd
+
 RUN lein do clean, uberjar, native
 
 FROM --platform=linux/amd64 gcr.io/distroless/base:latest
