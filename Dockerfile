@@ -36,7 +36,7 @@ RUN mkdir -p ./resources/profile-guided-optimizations/ && \
     kill $SERVER_PID && \
     wait $SERVER_PID || true
 
-RUN lein do clean, uberjar, native
+RUN sleep 60 && lein do clean, uberjar, native
 
 FROM gcr.io/distroless/base:latest
 
