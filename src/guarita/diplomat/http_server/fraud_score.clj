@@ -1,7 +1,7 @@
 (ns guarita.diplomat.http-server.fraud-score
   (:require [guarita.adapters.fraud-score :as adapters.fraud-score]
-            [jsonista.core :as j]
             [guarita.controllers.fraud-score :as controllers.fraud-score]
+            [jsonista.core :as j]
             [schema.core :as s]))
 
 (s/defn fraud-score!
