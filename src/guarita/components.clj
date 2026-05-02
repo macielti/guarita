@@ -1,6 +1,7 @@
 (ns guarita.components
   (:require [common-clj.integrant-components.config :as component.config]
             [common-clj.integrant-components.routes :as component.routes]
+            #_[clj-async-profiler.core :as prof]
             [guarita.dataset]
             [guarita.diplomat.http-server :as diplomat.http-server]
             [integrant.core :as ig]
@@ -21,15 +22,15 @@
 
 (def arranjo
   (merge
-   {::component.config/config {:path "resources/config.edn"
-                               :env  :prod}}
-   {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
-                              :labels-path  "resources/labels.bin"
-                              :ivf-path     "resources/ivf.bin"}}
-   {::routes               {:components components}}
-   {::component.routes/routes {:routes (ig/ref ::routes)}}
-   {::component.service/service {:components (merge components
-                                                    {:routes (ig/ref ::component.routes/routes)})}}))
+    {::component.config/config {:path "resources/config.edn"
+                                :env  :prod}}
+    {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
+                               :labels-path  "resources/labels.bin"
+                               :ivf-path     "resources/ivf.bin"}}
+    {::routes {:components components}}
+    {::component.routes/routes {:routes (ig/ref ::routes)}}
+    {::component.service/service {:components (merge components
+                                                     {:routes (ig/ref ::component.routes/routes)})}}))
 
 (defn start-system! []
   (timbre/set-min-level! :debug)
