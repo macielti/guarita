@@ -53,7 +53,6 @@
                                                     "native-image"
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
-                                                    "--pgo=default.iprof"
                                                     "-O3"
                                                     "-march=compatibility"
                                                     "--report-unsupported-elements-at-runtime"
