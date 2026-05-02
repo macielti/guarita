@@ -66,6 +66,7 @@
                                                     "-Dio.pedestal.log.defaultMetricsRecorder=nil"
                                                     "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
                                                     "-H:+UnlockExperimentalVMOptions"
+                                                    "-H:+UseG1GC"
                                                     "-H:+StaticExecutableWithDynamicLibC"
                                                     "-R:+ExitOnOutOfMemoryError"
                                                     "-H:Name=./target/${:name}"]}}}
