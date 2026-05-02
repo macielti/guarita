@@ -12,6 +12,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `lein uberjar` then `lein native` — build the GraalVM native image (optimized, with PGO). Requires `native-image` on `PATH`. The `Dockerfile` handles the full three-step PGO flow; see **PGO build pipeline** below.
 - `lein uberjar` then `lein native-pgo` — build the instrumented (non-optimized) native image for profile collection.
 
+## Evaluating fraud detection changes
+
+When tuning fraud detection parameters (k-NN neighborhood size, probe depth, voting strategy, threshold), measure impact with:
+
+1. **Start the application**: `lein run` (HTTP service on port 8001 in test mode)
+2. **Run the load test**: `k6 run resources/profile-guided-optimizations/test.js` 
+3. **Check results**: `test/results.json` contains:
+   - `p99` — 99th percentile latency (goal: <15ms)
+   - `weighted_errors_E` — error metric (2×FP + 2×FN; goal: minimize toward 0)
+   - `scoring.breakdown` — false positives, false negatives, true positives, true negatives
+   - `final_score` — overall performance score (higher is better)
+
+Changes to `src/guarita/controllers/fraud_score.clj` affect:
+- `k` — neighborhood size (5–7 typical); larger k = finer granularity but slower
+- `nprobe` — IVF clusters probed (4–16 typical); larger nprobe = better recall but slower
+- `threshold` — approval boundary; stricter (higher) = more false negatives, fewer false positives
+- Score function — simple majority count vs. distance-weighted voting
+
+Thread-local KNN scratch is pre-allocated for k≤8, nprobe≤16 (no realloc); stay within bounds to avoid GC overhead.
+
 ## Architecture
 
 Hexagonal architecture with the following layers (each entity gets its own file per layer):
