@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3-slim AS dataset
+FROM python:3-slim AS dataset
 
 WORKDIR /usr/src/app
 
@@ -8,9 +8,9 @@ RUN pip install --no-cache-dir numpy scikit-learn
 
 RUN mkdir -p resources && python3 scripts/generate_dataset.py
 
-FROM --platform=linux/amd64 grafana/k6:latest AS k6
+FROM grafana/k6:latest AS k6
 
-FROM --platform=linux/amd64 container-registry.oracle.com/graalvm/native-image:23 AS build
+FROM container-registry.oracle.com/graalvm/native-image:23 AS build
 
 RUN curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
     chmod +x lein && \
@@ -36,11 +36,9 @@ RUN mkdir -p ./resources/profile-guided-optimizations/ && \
     kill $SERVER_PID && \
     wait $SERVER_PID || true
 
-RUN sleep 10 && echo "=== Current directory ===" && pwd && echo "=== Contents of current dir ===" && ls -la && echo "=== Contents of profile directory ===" && ls -la ./resources/profile-guided-optimizations/ && echo "=== Done ==="
-
 RUN lein do clean, uberjar, native
 
-FROM --platform=linux/amd64 gcr.io/distroless/base:latest
+FROM gcr.io/distroless/base:latest
 
 WORKDIR /app
 
