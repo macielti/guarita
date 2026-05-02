@@ -92,6 +92,8 @@ KNN search lives in `guarita.dataset`. The production path is `knn-ivf` — it s
 - `hashp` is auto-injected in the `:dev` profile — `#p form` prints `form` and its value at the REPL. Do not commit `#p` calls.
 - Test paths `test/unit`, `test/integration`, `test/helpers` are declared in `project.clj` but the directories don't exist yet; create them when adding the first tests.
 - `lein native` is sensitive to reflection — `reflect-config.json` is the place to add reflective classes; `:initialize-at-build-time` is enabled globally via `graal-build-time`.
+- **Reflection overhead**: Reflection can significantly slow the application even at runtime. Add type hints (`^TypeName`) to variables and function args to help Clojure's compiler statically resolve method calls. `lein check` with `*warn-on-reflection* true` will surface unresolved calls. This is especially important for hot paths and method calls in tight loops.
+- **Jackson `JavaTimeModule` does not parse timestamps in generic map deserialization**: `j/read-value` produces `Map<String, Object>`, so ISO 8601 strings stay as plain strings regardless of `JavaTimeModule` being registered. The module only converts strings to `Instant` when deserializing into a typed Java class. Timestamp strings must still be parsed explicitly in adapters (e.g. via `jt/instant`). The module is registered in `guarita.interceptors/mapper` for correct `Instant` *serialization* (ISO 8601 output, not epoch millis).
 - `.clj-kondo/config.edn` lint-as's `pg.pool/with-connection` as `let`, hinting that PostgreSQL via `pg.pool` is expected (no DB code in-tree yet).
 - The user's global Clojure style guide already governs code style; do not restate it here.
 

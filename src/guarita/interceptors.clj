@@ -1,9 +1,12 @@
 (ns guarita.interceptors
-  (:require [jsonista.core :as j]))
+  (:require [jsonista.core :as j])
+  (:import [com.fasterxml.jackson.databind SerializationFeature]
+           [com.fasterxml.jackson.datatype.jsr310 JavaTimeModule]))
 
 (def mapper
   (j/object-mapper {:decode-key-fn true
-                    :modules       []}))
+                    :modules       [(JavaTimeModule.)]
+                    :features      {SerializationFeature/WRITE_DATES_AS_TIMESTAMPS false}}))
 
 (def body-json-params-interceptor
   {:name  ::jsonista-body-json-params

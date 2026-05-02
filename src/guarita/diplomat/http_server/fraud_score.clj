@@ -1,6 +1,7 @@
 (ns guarita.diplomat.http-server.fraud-score
   (:require [guarita.adapters.fraud-score :as adapters.fraud-score]
             [guarita.controllers.fraud-score :as controllers.fraud-score]
+            [guarita.interceptors :as interceptors]
             [jsonista.core :as j]
             [schema.core :as s]))
 
@@ -10,4 +11,4 @@
    :headers {"Content-Type" "application/json"}
    :body    ^bytes (-> (adapters.fraud-score/wire->fraud-score json-params)
                        (controllers.fraud-score/fraud-score! components)
-                       (j/write-value-as-bytes j/keyword-keys-object-mapper))})
+                       (j/write-value-as-bytes interceptors/mapper))})
