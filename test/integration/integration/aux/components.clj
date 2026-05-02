@@ -14,6 +14,10 @@
   {:config  (ig/ref ::component.config/config)
    :dataset (ig/ref :guarita.dataset/dataset)})
 
+(defmethod ig/init-key ::routes
+  [_ {:keys [components]}]
+  (diplomat.http-server/make-routes components))
+
 (def config-test
   (merge
    {::component.config/config  {:path "resources/config.example.edn"
@@ -21,7 +25,8 @@
    {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
                               :labels-path  "resources/labels.bin"
                               :ivf-path     "resources/ivf.bin"}}
-   {::component.routes/routes  {:routes diplomat.http-server/routes}}
+   {::routes               {:components components-test}}
+   {::component.routes/routes {:routes (ig/ref ::routes)}}
    {::component.service/service {:components (merge components-test
                                                     {:routes (ig/ref ::component.routes/routes)})}}))
 

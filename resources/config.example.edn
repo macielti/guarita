@@ -1,7 +1,6 @@
 {:prod {:name          "guarita"
-        :service       {:host        "0.0.0.0"
-                        :port        9999
-                        :max-threads 8}
+        :service       {:host "0.0.0.0"
+                        :port 9999}
         :normalization {:max-amount              10000
                         :max-installments        12
                         :amount-vs-avg-ratio     10
