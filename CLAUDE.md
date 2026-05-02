@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `lein test` — run all unit/integration tests (CI uses this).
 - `lein test :only guarita.foo-test/bar` — run a single test var.
 - `lein run` — start the HTTP service on port 8000. REPL equivalent: `(guarita.components/start-system!)` (returns the Integrant system map; hold it to `ig/halt!` later).
-- `lein uberjar` then `lein native` — build the GraalVM native image. Requires `native-image` on `PATH`; the `Dockerfile` chains both inside a GraalVM 23 image end-to-end.
+- `lein uberjar` then `lein native` — build the GraalVM native image (optimized, with PGO). Requires `native-image` on `PATH`. The `Dockerfile` handles the full three-step PGO flow; see **PGO build pipeline** below.
+- `lein uberjar` then `lein native-pgo` — build the instrumented (non-optimized) native image for profile collection.
 
 ## Architecture
 
@@ -55,7 +56,17 @@ The handler destructures `:json-params` and `:components` from the context map.
 
 ### Config
 
-Environment-keyed in `resources/config.edn`; running env (`:prod`) is selected in `components.clj`. Service binds `0.0.0.0:8000`.
+Environment-keyed in `resources/config.edn`; running env (`:prod`) is selected in `components.clj`. Service binds `0.0.0.0:9999` in `:prod`, `0.0.0.0:8001` in `:test`.
+
+### PGO build pipeline
+
+The Dockerfile implements a three-step Profile-Guided Optimization flow entirely inside Docker:
+
+1. **Instrumented build** (`lein do clean, uberjar, native-pgo`) — produces `./target/guarita` with profiling hooks baked in.
+2. **Profile collection** — starts the instrumented binary with `-XX:ProfilesDumpFile=./resources/profile-guided-optimizations/profile.iprof`, runs the k6 load test at `resources/profile-guided-optimizations/test.js` (targets `localhost:9999`), then kills the server. The profile is flushed on process exit. `wait $SERVER_PID || true` is required because `kill` + `wait` returns exit code 143 (128 + SIGTERM), which is intentional and must be suppressed.
+3. **Optimized build** (`lein do clean, uberjar, native`) — the `native` alias includes `--pgo=./resources/profile-guided-optimizations/profile.iprof`. `lein clean` only removes `./target/`, so the profile in `./resources/` survives.
+
+`profile.iprof` is gitignored and generated at build time only. The k6 stage copies the binary from `grafana/k6:latest` to avoid package-manager installs.
 
 ### Reference data
 
