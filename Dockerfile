@@ -33,7 +33,7 @@ RUN ./target/guarita -XX:ProfilesDumpFile=./resources/profile-guided-optimizatio
     for i in $(seq 1 30); do curl -sf http://localhost:9999/ready && break || sleep 2; done && \
     k6 run ./resources/profile-guided-optimizations/test.js && \
     kill $SERVER_PID && \
-    wait $SERVER_PID
+    wait $SERVER_PID || true
 
 RUN lein do clean, uberjar, native
 
