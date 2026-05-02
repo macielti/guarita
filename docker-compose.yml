@@ -17,11 +17,11 @@ services:
           memory: "50MB"
 
   api1:
-    image: ghcr.io/macielti/guarita:sha-edbfe94
+    image: ghcr.io/macielti/guarita:sha-fd589c8
     container_name: guarita_api1
     restart: unless-stopped
     volumes:
-      - ./config.edn:/app/resources/config.edn
+      - ./resources/config.edn:/app/resources/config.edn
     deploy:
       resources:
         limits:
@@ -29,11 +29,11 @@ services:
           memory: "150MB"
 
   api2:
-    image: ghcr.io/macielti/guarita:sha-edbfe94
+    image: ghcr.io/macielti/guarita:sha-fd589c8
     container_name: guarita_api2
     restart: unless-stopped
     volumes:
-      - ./config.edn:/app/resources/config.edn
+      - ./resources/config.edn:/app/resources/config.edn
     deploy:
       resources:
         limits:
