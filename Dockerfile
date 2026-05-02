@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir numpy scikit-learn
 
 RUN mkdir -p resources && python3 scripts/generate_dataset.py
 
+FROM --platform=linux/amd64 grafana/k6:latest AS k6
+
 FROM --platform=linux/amd64 container-registry.oracle.com/graalvm/native-image:23 AS build
 
 RUN curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
@@ -22,6 +24,16 @@ WORKDIR /usr/src/app
 COPY --from=dataset /usr/src/app/resources/vectors.bin resources/vectors.bin
 COPY --from=dataset /usr/src/app/resources/labels.bin resources/labels.bin
 COPY --from=dataset /usr/src/app/resources/ivf.bin resources/ivf.bin
+COPY --from=k6 /usr/bin/k6 /usr/bin/k6
+
+RUN lein do clean, uberjar, native-pgo
+
+RUN ./target/guarita -XX:ProfilesDumpFile=./resources/profile-guided-optimizations/profile.iprof & \
+    SERVER_PID=$! && \
+    for i in $(seq 1 30); do curl -sf http://localhost:9999/ready && break || sleep 2; done && \
+    k6 run ./resources/profile-guided-optimizations/test.js && \
+    kill $SERVER_PID && \
+    wait $SERVER_PID
 
 RUN lein do clean, uberjar, native
 

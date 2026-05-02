@@ -20,7 +20,7 @@
 
 (def config-test
   (merge
-   {::component.config/config  {:path "resources/config.example.edn"
+   {::component.config/config  {:path "resources/config.edn"
                                 :env  :test}}
    {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
                               :labels-path  "resources/labels.bin"

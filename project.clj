@@ -49,11 +49,32 @@
                                     "clean-ns-fix" ["clojure-lsp" "clean-ns"] ;; Fix namespaces not clean
                                     "format-fix"   ["clojure-lsp" "format"] ;; Fix namespaces not formatted
                                     "lint-fix"     ["do" ["clean-ns-fix"] ["format-fix"]] ;; Fix both
+                                    "native-pgo"   ["shell"
+                                                    "native-image"
+                                                    "--pgo-instrument"
+                                                    "--no-fallback"
+                                                    "--enable-url-protocols=http,https"
+                                                    "-march=compatibility"
+                                                    "--report-unsupported-elements-at-runtime"
+
+                                                    "--initialize-at-build-time"
+                                                    "--initialize-at-run-time=io.prometheus.client.Striped64"
+
+                                                    "-H:ReflectionConfigurationFiles=reflect-config.json"
+                                                    "--features=clj_easy.graal_build_time.InitClojureClasses"
+                                                    "-Dio.pedestal.log.defaultMetricsRecorder=nil"
+                                                    "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
+                                                    "-H:+UnlockExperimentalVMOptions"
+                                                    "-H:+UseG1GC"
+                                                    "-H:+StaticExecutableWithDynamicLibC"
+                                                    "-R:+ExitOnOutOfMemoryError"
+                                                    "-H:Name=./target/${:name}"]
                                     "native"       ["shell"
                                                     "native-image"
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
                                                     "-O3"
+                                                    "--pgo=./resources/profile-guided-optimizations/profile.iprof"
                                                     "-march=compatibility"
                                                     "--report-unsupported-elements-at-runtime"
 

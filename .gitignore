@@ -13,7 +13,7 @@ pom.xml.asc
 .hg/
 /guarita.iml
 /.idea/
-/resources/config.edn
+/resources/profile-guided-optimizations/profile.iprof
 /.clj-kondo/.cache/
 /.clj-kondo/imports/
 /.lsp/.cache/
