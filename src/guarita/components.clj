@@ -18,14 +18,14 @@
 
 (def arranjo
   (merge
-   {::component.config/config {:path "resources/config.edn"
-                               :env  :prod}}
-   {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
-                              :labels-path  "resources/labels.bin"
-                              :ivf-path     "resources/ivf.bin"}}
-   {::component.routes/routes {:routes diplomat.http-server/routes}}
-   {::component.service/service {:components (merge components
-                                                    {:routes (ig/ref ::component.routes/routes)})}}))
+    {::component.config/config {:path "resources/config.edn"
+                                :env  :prod}}
+    {:guarita.dataset/dataset {:vectors-path "resources/vectors.bin"
+                               :labels-path  "resources/labels.bin"
+                               :ivf-path     "resources/ivf.bin"}}
+    {::component.routes/routes {:routes diplomat.http-server/routes}}
+    {::component.service/service {:components (merge components
+                                                     {:routes (ig/ref ::component.routes/routes)})}}))
 
 (defn start-system! []
   (timbre/set-min-level! :debug)

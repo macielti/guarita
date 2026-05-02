@@ -16,6 +16,7 @@
                  [io.pedestal/pedestal.error "0.8.1"]
                  [io.pedestal/pedestal.interceptor "0.8.1"]
                  [com.taoensso/timbre "6.8.0"]
+                 [metosin/jsonista "1.0.0"]
 
                  ;GraalVM native image building
                  [com.github.clj-easy/graal-build-time "1.0.5"]]

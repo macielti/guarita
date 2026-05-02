@@ -9,6 +9,5 @@
     :route-name :ready]
    ["/fraud-score"
     :post [(body-params/body-params)
-           pedestal.service.interceptors/json-body
            diplomat.http-server.fraud-score/fraud-score!]
     :route-name :fraud-score]])
