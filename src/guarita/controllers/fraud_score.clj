@@ -4,15 +4,12 @@
             [guarita.logic.fraud-score :as logic.fraud-score]))
 
 (def ^:private k 5)
-(def ^:private nprobe 16)
-(def ^:private threshold 0.6)
+(def ^:private nprobe 8)
 
 (defn fraud-score!
-  [input {:keys [config dataset]}]
+  "Returns the raw fraud count (0–k) so the caller can do a direct array lookup."
+  ^long [input {:keys [config dataset]}]
   (let [normalization (config/normalization config)
         mcc-risk      (config/mcc-risk config)
-        ^floats query-arr (logic.fraud-score/vectorized input normalization mcc-risk)
-        fraud-count   (dataset/knn-ivf-fraud-count dataset query-arr k nprobe)
-        score         (/ (double fraud-count) k)]
-    {:approved    (< score threshold)
-     :fraud_score score}))
+        ^floats query-arr (logic.fraud-score/vectorized input normalization mcc-risk)]
+    (dataset/knn-ivf-fraud-count dataset query-arr k nprobe)))
