@@ -20,3 +20,6 @@ pom.xml.asc
 /resources/vectors.bin
 /resources/labels.bin
 /resources/ivf.bin
+!/resources/vectors.bin.gz
+!/resources/labels.bin.gz
+!/resources/ivf.bin.gz
