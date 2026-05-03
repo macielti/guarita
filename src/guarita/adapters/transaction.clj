@@ -1,13 +1,13 @@
 (ns guarita.adapters.transaction
-  (:require [java-time.api :as jt]))
+  (:import [java.time Instant]))
 
 (defn wire->transaction
   [{:keys [amount installments requested_at]}]
   {:amount       amount
    :installments installments
-   :requested-at (jt/instant requested_at)})
+   :requested-at (Instant/parse ^CharSequence requested_at)})
 
 (defn wire->last-transaction
   [{:keys [timestamp km_from_current]}]
-  {:timestamp       (jt/instant timestamp)
+  {:timestamp       (Instant/parse ^CharSequence timestamp)
    :km-from-current km_from_current})
