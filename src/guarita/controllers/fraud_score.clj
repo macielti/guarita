@@ -4,7 +4,7 @@
             [guarita.logic.fraud-score :as logic.fraud-score]))
 
 (def ^:private k 5)
-(def ^:private nprobe 6)
+(def ^:private nprobe 4)
 
 (defn fraud-score!
   "Returns the raw fraud count (0–k) so the caller can do a direct array lookup."
