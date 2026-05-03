@@ -6,7 +6,7 @@
             [schema.core :as s]))
 
 (def ^:private k 5)
-(def ^:private nprobe 16)
+(def ^:private nprobe 8)
 (def ^:private threshold 0.6)
 
 (s/defn fraud-score! :- models.fraud-score/FraudScoreResult
@@ -15,8 +15,7 @@
   (let [normalization (config/normalization config)
         mcc-risk      (config/mcc-risk config)
         ^floats query-arr (logic.fraud-score/vectorized input normalization mcc-risk)
-        neighbors     (dataset/knn-ivf dataset query-arr k nprobe)
-        fraud-count   (reduce (fn [n {:keys [label]}] (if (= :fraud label) (inc n) n)) 0 neighbors)
+        fraud-count   (dataset/knn-ivf-fraud-count dataset query-arr k nprobe)
         score         (/ (double fraud-count) k)]
     {:approved    (< score threshold)
      :fraud_score score}))

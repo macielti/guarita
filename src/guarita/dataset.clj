@@ -260,3 +260,30 @@
                         (aget offsets cid) (aget offsets (inc cid)) s)))
         (recur (inc ci))))
     (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
+
+(defn knn-ivf-fraud-count
+  "Like knn-ivf but returns the fraud count directly, skipping map/sort allocation.
+  Use this on the hot path when only the fraud count is needed."
+  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
+   ^floats query ^long k ^long nprobe]
+  (let [^KnnScratch s (acquire-scratch! k nprobe)]
+    (topn-clusters! centroids nlist query nprobe s)
+    (loop [ci 0]
+      (when (< ci nprobe)
+        (let [cid (aget ^ints (.cl-ids s) ci)]
+          (when (>= cid 0)
+            (knn-range! vectors query k
+                        (aget offsets cid) (aget offsets (inc cid)) s)))
+        (recur (inc ci))))
+    (let [^longs top-idx   (.top-idx s)
+          ^doubles top-dist (.top-dist s)]
+      (loop [i 0 n 0]
+        (if (< i k)
+          (let [d (aget top-dist i)]
+            (if (< d Double/POSITIVE_INFINITY)
+              (recur (inc i)
+                     (if (= 1 (long (.get ^ByteBuffer labels (int (aget top-idx i)))))
+                       (inc n)
+                       n))
+              (recur (inc i) n)))
+          n)))))
