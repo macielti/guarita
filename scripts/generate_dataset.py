@@ -46,9 +46,13 @@ np.cumsum(counts, out=offsets[1:])
 
 print(f'cluster sizes: min={counts.min()} max={counts.max()} mean={counts.mean():.1f}', flush=True)
 
+SCALE = 8192  # 2^13 fractional bits
+vectors_i16 = np.clip(np.round(vectors * SCALE), np.iinfo(np.int16).min, np.iinfo(np.int16).max).astype(np.int16)
+print(f'quantized to int16 (scale={SCALE}); max_err={np.abs(vectors - vectors_i16 / SCALE).max():.6f}', flush=True)
+
 t2 = time.time()
 with open('resources/vectors.bin', 'wb') as f:
-    f.write(vectors.tobytes(order='C'))
+    f.write(vectors_i16.tobytes(order='C'))
 with open('resources/labels.bin', 'wb') as f:
     f.write(labels.tobytes(order='C'))
 with open('resources/ivf.bin', 'wb') as f:

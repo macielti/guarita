@@ -2,11 +2,12 @@
   (:require [integrant.core :as ig]
             [taoensso.timbre :as log])
   (:import [java.io RandomAccessFile]
-           [java.nio ByteBuffer ByteOrder FloatBuffer]
+           [java.nio ByteBuffer ByteOrder ShortBuffer]
            [java.nio.channels FileChannel$MapMode]))
 
 (def ^:private dim 14)
-(def ^:private bytes-per-vector (* dim 4))
+(def ^:private bytes-per-vector (* dim 2))
+(def ^:private ^double scale-inv (/ 1.0 8192.0))
 ;; "IVF1" little-endian
 (def ^:private ivf-magic 0x31465649)
 (def ^:private ivf-header-bytes 16)
@@ -17,7 +18,7 @@
                      ^ints cl-ids
                      ^doubles cl-dist
                      ^ints cl-worst
-                     ^floats vec-scratch])
+                     ^shorts vec-scratch])
 
 (defn- make-knn-scratch ^KnnScratch [^long k ^long nprobe]
   (KnnScratch.
@@ -27,7 +28,7 @@
    (int-array nprobe -1)
    (double-array nprobe Double/POSITIVE_INFINITY)
    (int-array 1 0)
-   (float-array 14)))
+   (short-array 14)))
 
 ;; Default sized for k≤8, nprobe≤16 — covers all current callers without realloc.
 (def ^:private ^ThreadLocal tl-knn-scratch
@@ -82,7 +83,7 @@
         ^ByteBuffer v-buf v-buf
         ^ByteBuffer l-buf l-buf
         ^ByteBuffer i-buf i-buf
-        vectors (.asFloatBuffer v-buf)
+        vectors (.asShortBuffer v-buf)
         n       (long (/ v-size bytes-per-vector))
         magic   (.getInt i-buf 0)
         nlist   (.getInt i-buf 4)
@@ -115,23 +116,23 @@
   (doseq [h handles] (.close h)))
 
 (defn- sq-dist-buf
-  ^double [^FloatBuffer vectors ^floats query ^long i ^floats scratch]
+  ^double [^ShortBuffer vectors ^floats query ^long i ^shorts scratch]
   (let [start (int (* i 14))
         _     (.get vectors start scratch 0 14)
-        d0  (- (double (aget scratch  0)) (double (aget query  0)))
-        d1  (- (double (aget scratch  1)) (double (aget query  1)))
-        d2  (- (double (aget scratch  2)) (double (aget query  2)))
-        d3  (- (double (aget scratch  3)) (double (aget query  3)))
-        d4  (- (double (aget scratch  4)) (double (aget query  4)))
-        d5  (- (double (aget scratch  5)) (double (aget query  5)))
-        d6  (- (double (aget scratch  6)) (double (aget query  6)))
-        d7  (- (double (aget scratch  7)) (double (aget query  7)))
-        d8  (- (double (aget scratch  8)) (double (aget query  8)))
-        d9  (- (double (aget scratch  9)) (double (aget query  9)))
-        d10 (- (double (aget scratch 10)) (double (aget query 10)))
-        d11 (- (double (aget scratch 11)) (double (aget query 11)))
-        d12 (- (double (aget scratch 12)) (double (aget query 12)))
-        d13 (- (double (aget scratch 13)) (double (aget query 13)))
+        d0  (- (* (double (aget scratch  0)) scale-inv) (double (aget query  0)))
+        d1  (- (* (double (aget scratch  1)) scale-inv) (double (aget query  1)))
+        d2  (- (* (double (aget scratch  2)) scale-inv) (double (aget query  2)))
+        d3  (- (* (double (aget scratch  3)) scale-inv) (double (aget query  3)))
+        d4  (- (* (double (aget scratch  4)) scale-inv) (double (aget query  4)))
+        d5  (- (* (double (aget scratch  5)) scale-inv) (double (aget query  5)))
+        d6  (- (* (double (aget scratch  6)) scale-inv) (double (aget query  6)))
+        d7  (- (* (double (aget scratch  7)) scale-inv) (double (aget query  7)))
+        d8  (- (* (double (aget scratch  8)) scale-inv) (double (aget query  8)))
+        d9  (- (* (double (aget scratch  9)) scale-inv) (double (aget query  9)))
+        d10 (- (* (double (aget scratch 10)) scale-inv) (double (aget query 10)))
+        d11 (- (* (double (aget scratch 11)) scale-inv) (double (aget query 11)))
+        d12 (- (* (double (aget scratch 12)) scale-inv) (double (aget query 12)))
+        d13 (- (* (double (aget scratch 13)) scale-inv) (double (aget query 13)))
         s0  (+ (* d0  d0)  (* d1  d1))
         s1  (+ (* d2  d2)  (* d3  d3))
         s2  (+ (* d4  d4)  (* d5  d5))
@@ -201,7 +202,7 @@
         (recur (inc c))))))
 
 (defn- knn-range! [vectors query k start end s]
-  (let [^FloatBuffer vectors vectors
+  (let [^ShortBuffer vectors vectors
         ^floats query query
         ^long k k
         ^long start start
@@ -210,7 +211,7 @@
         ^longs top-idx (.top-idx s)
         ^doubles top-dist (.top-dist s)
         ^ints worst (.worst s)
-        ^floats vec-scratch (.vec-scratch s)]
+        ^shorts vec-scratch (.vec-scratch s)]
     (loop [i start]
       (when (< i end)
         (let [d (sq-dist-buf vectors query i vec-scratch)]
@@ -239,7 +240,7 @@
 
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
-  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^long n]} ^floats query ^long k]
+  [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^long n]} ^floats query ^long k]
   (let [^KnnScratch s (acquire-scratch! k 16)]
     (knn-range! vectors query k 0 n s)
     (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
@@ -248,7 +249,7 @@
   "IVF-based k-NN: scans only the nprobe clusters whose centroids are nearest
   to the query. Vectors are stored cluster-contiguous in vectors.bin so each
   cluster scan is a tight loop over a flat slice of the mmap."
-  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
+  [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
   (let [^KnnScratch s (acquire-scratch! k nprobe)]
     (topn-clusters! centroids nlist query nprobe s)
@@ -264,7 +265,7 @@
 (defn knn-ivf-fraud-count
   "Like knn-ivf but returns the fraud count directly, skipping map/sort allocation.
   Use this on the hot path when only the fraud count is needed."
-  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
+  [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
   (let [^KnnScratch s (acquire-scratch! k nprobe)]
     (topn-clusters! centroids nlist query nprobe s)
@@ -291,7 +292,7 @@
 (defn knn-ivf-weighted-fraud-score
   "Returns inverse-distance-weighted fraud probability in [0.0, 1.0].
   Closer fraud neighbors contribute more weight than distant ones."
-  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
+  [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
   (let [^KnnScratch s (acquire-scratch! k nprobe)]
     (topn-clusters! centroids nlist query nprobe s)
