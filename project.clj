@@ -63,6 +63,7 @@
                                                     "--features=clj_easy.graal_build_time.InitClojureClasses"
                                                     "-Dio.pedestal.log.defaultMetricsRecorder=nil"
                                                     "-jar" "./target/${:uberjar-name:-${:name}-${:version}-standalone.jar}"
+                                                    "-H:+UseG1GC"
                                                     "-H:+StaticExecutableWithDynamicLibC"
                                                     "-R:+ExitOnOutOfMemoryError"
                                                     "-H:Name=./target/${:name}"]}}}
