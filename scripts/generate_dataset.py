@@ -28,8 +28,8 @@ for i, row in enumerate(data):
     labels[i] = 1 if row['label'] == 'fraud' else 0
 
 t1 = time.time()
-print(f'fitting KMeans(n_clusters={NLIST}, tol=1e-6) on {n} vectors...', flush=True)
-km = KMeans(n_clusters=NLIST, n_init=1, random_state=0, verbose=1, tol=1e-6)
+print(f'fitting KMeans(n_clusters={NLIST}) on {n} vectors...', flush=True)
+km = KMeans(n_clusters=NLIST, n_init=1, random_state=0, verbose=1)
 assignments = km.fit_predict(vectors)
 centroids = km.cluster_centers_.astype(np.float32)
 print(f'KMeans done in {time.time()-t1:.1f}s ({km.n_iter_} iterations)', flush=True)
