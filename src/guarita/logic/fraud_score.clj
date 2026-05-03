@@ -125,7 +125,7 @@
         ^Instant tx-ts  (Instant/parse ^CharSequence (:requested_at transaction))
         cust-avg-amt    (double (:avg_amount customer))
         cust-tx-count   (double (:tx_count_24h customer))
-        known-merchants ^java.util.Collection (:known_merchants customer)
+        ^java.util.Collection known-merchants (:known_merchants customer)
         merch-id        (:id merchant)
         merch-mcc       (:mcc merchant)
         merch-avg-amt   (double (:avg_amount merchant))
