@@ -113,3 +113,45 @@
       (if (contains? known-merchants merch-id) 0.0 1.0)
       (double (get mcc-risk merch-mcc 0.5))
       (clamp (/ merch-avg-amt max-merchant-avg-amount))])))
+
+(defn vectorized-from-wire
+  "Compute feature vector directly from raw JSON-parsed wire map, skipping adapter allocation."
+  [{:keys [transaction customer merchant terminal last_transaction]}
+   {:keys [max-amount max-installments amount-vs-avg-ratio max-minutes max-km
+           max-tx-count-24h max-merchant-avg-amount]}
+   mcc-risk]
+  (let [tx-amount       (double (:amount transaction))
+        tx-installments (double (:installments transaction))
+        ^Instant tx-ts  (Instant/parse ^CharSequence (:requested_at transaction))
+        cust-avg-amt    (double (:avg_amount customer))
+        cust-tx-count   (double (:tx_count_24h customer))
+        known-merchants ^java.util.Collection (:known_merchants customer)
+        merch-id        (:id merchant)
+        merch-mcc       (:mcc merchant)
+        merch-avg-amt   (double (:avg_amount merchant))
+        term-online?    (:is_online terminal)
+        term-card?      (:card_present terminal)
+        term-km-home    (double (:km_from_home terminal))
+        epoch-sec       (.getEpochSecond tx-ts)
+        hour            (mod (quot epoch-sec 3600) 24)
+        day             (mod (+ (quot epoch-sec 86400) 3) 7)]
+    (float-array
+     [(clamp (/ tx-amount max-amount))
+      (clamp (/ tx-installments max-installments))
+      (clamp (/ tx-amount cust-avg-amt amount-vs-avg-ratio))
+      (/ (double hour) 23.0)
+      (/ (double day) 6.0)
+      (if (nil? last_transaction)
+        -1.0
+        (clamp (/ (.toMinutes ^Duration (Duration/between (Instant/parse ^CharSequence (:timestamp last_transaction)) tx-ts))
+                  max-minutes)))
+      (if (nil? last_transaction)
+        -1.0
+        (clamp (/ (double (:km_from_current last_transaction)) max-km)))
+      (clamp (/ term-km-home max-km))
+      (clamp (/ cust-tx-count max-tx-count-24h))
+      (if term-online? 1.0 0.0)
+      (if term-card? 1.0 0.0)
+      (if (.contains known-merchants merch-id) 0.0 1.0)
+      (double (get mcc-risk merch-mcc 0.5))
+      (clamp (/ merch-avg-amt max-merchant-avg-amount))])))

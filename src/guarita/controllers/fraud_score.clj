@@ -8,8 +8,8 @@
 
 (defn fraud-score!
   "Returns the raw fraud count (0–k) so the caller can do a direct array lookup."
-  ^long [input {:keys [config dataset]}]
+  ^long [wire-input {:keys [config dataset]}]
   (let [normalization (config/normalization config)
         mcc-risk      (config/mcc-risk config)
-        ^floats query-arr (logic.fraud-score/vectorized input normalization mcc-risk)]
+        ^floats query-arr (logic.fraud-score/vectorized-from-wire wire-input normalization mcc-risk)]
     (dataset/knn-ivf-fraud-count dataset query-arr k nprobe)))
