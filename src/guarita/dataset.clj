@@ -2,7 +2,7 @@
   (:require [integrant.core :as ig]
             [taoensso.timbre :as log])
   (:import [java.io RandomAccessFile]
-           [java.nio ByteBuffer ByteOrder]
+           [java.nio ByteBuffer ByteOrder FloatBuffer]
            [java.nio.channels FileChannel$MapMode]))
 
 (def ^:private dim 14)
@@ -16,7 +16,8 @@
                      ^ints worst
                      ^ints cl-ids
                      ^doubles cl-dist
-                     ^ints cl-worst])
+                     ^ints cl-worst
+                     ^floats vec-scratch])
 
 (defn- make-knn-scratch ^KnnScratch [^long k ^long nprobe]
   (KnnScratch.
@@ -25,7 +26,8 @@
    (int-array 1 0)
    (int-array nprobe -1)
    (double-array nprobe Double/POSITIVE_INFINITY)
-   (int-array 1 0)))
+   (int-array 1 0)
+   (float-array 14)))
 
 ;; Default sized for k≤8, nprobe≤16 — covers all current callers without realloc.
 (def ^:private ^ThreadLocal tl-knn-scratch
@@ -80,15 +82,12 @@
         ^ByteBuffer v-buf v-buf
         ^ByteBuffer l-buf l-buf
         ^ByteBuffer i-buf i-buf
+        vectors (.asFloatBuffer v-buf)
         n       (long (/ v-size bytes-per-vector))
         magic   (.getInt i-buf 0)
         nlist   (.getInt i-buf 4)
         ntotal  (.getInt i-buf 8)
-        ivf-dim (.getInt i-buf 12)
-        vectors (let [fb (.asFloatBuffer v-buf)
-                      fa (float-array (* n dim))]
-                  (.get ^java.nio.FloatBuffer fb fa)
-                  fa)]
+        ivf-dim (.getInt i-buf 12)]
     (when-not (zero? (rem v-size bytes-per-vector))
       (throw (ex-info "vectors.bin com tamanho inválido"
                       {:size v-size :expected-multiple-of bytes-per-vector})))
@@ -115,31 +114,32 @@
   (log/info :stopping ::dataset)
   (doseq [h handles] (.close h)))
 
-(defn- sq-dist-at
-  ^double [^floats vectors ^floats query ^long i]
-  (let [start (unchecked-multiply i 14)]
+(defn- sq-dist-buf
+  ^double [^FloatBuffer vectors ^floats query ^long i ^floats scratch]
+  (let [start (int (* i 14))]
+    (.get vectors start scratch 0 14)
     (loop [k 0 acc 0.0]
       (if (< k 14)
-        (let [diff (- (double (aget vectors (unchecked-add start k)))
+        (let [diff (- (double (aget scratch k))
                       (double (aget query k)))]
-          (recur (unchecked-inc k) (+ acc (* diff diff))))
+          (recur (inc k) (+ acc (* diff diff))))
         acc))))
 
 (defn- sq-dist-arr
   ^double [^floats centroids ^long c-off ^floats query]
   (loop [k 0 acc 0.0]
     (if (< k 14)
-      (let [diff (- (aget centroids (unchecked-add c-off k))
+      (let [diff (- (aget centroids (+ c-off k))
                     (aget query k))]
-        (recur (unchecked-inc k) (+ acc (* diff diff))))
+        (recur (inc k) (+ acc (* diff diff))))
       acc)))
 
 (defn- update-worst! [^doubles top-dist ^ints worst ^long k]
   (loop [j 0 max-d Double/NEGATIVE_INFINITY max-pos 0]
     (if (< j k)
       (if (> (aget top-dist j) max-d)
-        (recur (unchecked-inc j) (aget top-dist j) j)
-        (recur (unchecked-inc j) max-d max-pos))
+        (recur (inc j) (aget top-dist j) j)
+        (recur (inc j) max-d max-pos))
       (aset worst 0 (int max-pos)))))
 
 (defn- topn-clusters! [centroids nlist query nprobe s]
@@ -153,15 +153,15 @@
         ^ints cl-ids (.cl-ids s)]
     (loop [c 0]
       (when (< c nlist)
-        (let [d (sq-dist-arr centroids (unchecked-multiply c 14) query)]
+        (let [d (sq-dist-arr centroids (* c 14) query)]
           (when (< d (aget cl-dist (aget cl-worst 0)))
             (aset cl-ids (aget cl-worst 0) (int c))
             (aset cl-dist (aget cl-worst 0) d)
             (update-worst! cl-dist cl-worst nprobe)))
-        (recur (unchecked-inc c))))))
+        (recur (inc c))))))
 
 (defn- knn-range! [vectors query k start end s]
-  (let [^floats vectors vectors
+  (let [^FloatBuffer vectors vectors
         ^floats query query
         ^long k k
         ^long start start
@@ -169,25 +169,24 @@
         ^KnnScratch s s
         ^longs top-idx (.top-idx s)
         ^doubles top-dist (.top-dist s)
-        ^ints worst (.worst s)]
+        ^ints worst (.worst s)
+        ^floats vec-scratch (.vec-scratch s)]
     (loop [i start]
       (when (< i end)
-        (let [d (sq-dist-at vectors query i)]
+        (let [d (sq-dist-buf vectors query i vec-scratch)]
           (when (< d (aget top-dist (aget worst 0)))
             (aset top-idx (aget worst 0) (long i))
             (aset top-dist (aget worst 0) d)
             (update-worst! top-dist worst k)))
-        (recur (unchecked-inc i))))))
+        (recur (inc i))))))
 
 (defn- finalize-results
   [^ByteBuffer labels ^longs top-idx ^doubles top-dist ^long k]
   (let [pairs (java.util.ArrayList.)]
-    (loop [i 0]
-      (when (< i k)
-        (let [d (aget top-dist i)]
-          (when (< d Double/POSITIVE_INFINITY)
-            (.add pairs (object-array [(aget top-idx i) d]))))
-        (recur (unchecked-inc i))))
+    (dotimes [i k]
+      (let [d (aget top-dist i)]
+        (when (< d Double/POSITIVE_INFINITY)
+          (.add pairs (object-array [(aget top-idx i) d])))))
     (.sort pairs (java.util.Comparator/comparingDouble (fn [^objects p] (aget p 1))))
     (mapv (fn [^objects p]
             (let [idx (long (aget p 0))]
@@ -200,7 +199,7 @@
 
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
-  [{:keys [^ByteBuffer labels ^floats vectors ^long n]} ^floats query ^long k]
+  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^long n]} ^floats query ^long k]
   (let [^KnnScratch s (acquire-scratch! k 16)]
     (knn-range! vectors query k 0 n s)
     (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
@@ -209,7 +208,7 @@
   "IVF-based k-NN: scans only the nprobe clusters whose centroids are nearest
   to the query. Vectors are stored cluster-contiguous in vectors.bin so each
   cluster scan is a tight loop over a flat slice of the mmap."
-  [{:keys [^ByteBuffer labels ^floats vectors ^floats centroids ^ints offsets ^long nlist]}
+  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
   (let [^KnnScratch s (acquire-scratch! k nprobe)]
     (topn-clusters! centroids nlist query nprobe s)
@@ -218,6 +217,6 @@
         (let [cid (aget ^ints (.cl-ids s) ci)]
           (when (>= cid 0)
             (knn-range! vectors query k
-                        (aget offsets cid) (aget offsets (unchecked-inc cid)) s)))
-        (recur (unchecked-inc ci))))
+                        (aget offsets cid) (aget offsets (inc cid)) s)))
+        (recur (inc ci))))
     (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
