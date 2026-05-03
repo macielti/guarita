@@ -6,7 +6,7 @@ import struct
 import urllib.request
 
 import numpy as np
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import KMeans
 
 URL = 'https://github.com/zanfranceschi/rinha-de-backend-2026/raw/main/resources/references.json.gz'
 NLIST = 1700
@@ -23,8 +23,8 @@ for i, row in enumerate(data):
     vectors[i] = row['vector']
     labels[i] = 1 if row['label'] == 'fraud' else 0
 
-print(f'fitting MiniBatchKMeans(n_clusters={NLIST}) on {n} vectors')
-km = MiniBatchKMeans(n_clusters=NLIST, batch_size=8192, n_init=3, random_state=0)
+print(f'fitting KMeans(n_clusters={NLIST}) on {n} vectors')
+km = KMeans(n_clusters=NLIST, n_init=10, random_state=0)
 assignments = km.fit_predict(vectors)
 centroids = km.cluster_centers_.astype(np.float32)
 
