@@ -24,7 +24,7 @@ for i, row in enumerate(data):
     labels[i] = 1 if row['label'] == 'fraud' else 0
 
 print(f'fitting KMeans(n_clusters={NLIST}) on {n} vectors')
-km = KMeans(n_clusters=NLIST, n_init=10, random_state=0)
+km = KMeans(n_clusters=NLIST, n_init=1, random_state=0)
 assignments = km.fit_predict(vectors)
 centroids = km.cluster_centers_.astype(np.float32)
 
