@@ -56,4 +56,12 @@ with open('resources/ivf.bin', 'wb') as f:
     f.write(centroids.tobytes(order='C'))
     f.write(offsets.tobytes(order='C'))
 
-print(f'{n} records written in {time.time()-t2:.1f}s; nlist={NLIST}; total={time.time()-t0:.1f}s', flush=True)
+print(f'{n} records written in {time.time()-t2:.1f}s; nlist={NLIST}', flush=True)
+
+t3 = time.time()
+for name in ('vectors', 'labels', 'ivf'):
+    src = f'resources/{name}.bin'
+    dst = f'resources/{name}.bin.gz'
+    with open(src, 'rb') as f_in, gzip.open(dst, 'wb') as f_out:
+        f_out.write(f_in.read())
+print(f'compressed in {time.time()-t3:.1f}s; total={time.time()-t0:.1f}s', flush=True)
