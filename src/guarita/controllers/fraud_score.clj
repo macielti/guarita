@@ -3,8 +3,8 @@
             [guarita.dataset :as dataset]
             [guarita.logic.fraud-score :as logic.fraud-score]))
 
-(def ^:private k 5)
-(def ^:private nprobe 8)
+(def ^:private k 7)
+(def ^:private nprobe 7)
 
 (defn fraud-score!
   ^double [wire-input {:keys [config dataset]}]
