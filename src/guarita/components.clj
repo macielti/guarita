@@ -5,12 +5,8 @@
             [guarita.dataset]
             [guarita.diplomat.http-server :as diplomat.http-server]
             [integrant.core :as ig]
-            [service.component :as component.service]
-            [taoensso.timbre :as timbre]
-            [taoensso.timbre.tools.logging])
+            [service.component :as component.service])
   (:gen-class))
-
-(taoensso.timbre.tools.logging/use-timbre)
 
 (def components
   {:config  (ig/ref ::component.config/config)
@@ -33,11 +29,10 @@
                                                     {:routes (ig/ref ::component.routes/routes)})}}))
 
 (defn start-system! []
-  (timbre/set-min-level! :debug)
   (ig/init arranjo))
 
 (defn -main [& _args]
   (let [system (start-system!)]
-    #_(prof/serve-ui 8080)
+    (prof/serve-ui 8080)
     (.addShutdownHook (Runtime/getRuntime)
                       (Thread. #(ig/halt! system)))))
