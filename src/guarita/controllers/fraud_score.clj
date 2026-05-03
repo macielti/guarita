@@ -4,7 +4,7 @@
             [guarita.logic.fraud-score :as logic.fraud-score]))
 
 (def ^:private k 5)
-(def ^:private nprobe 8)
+(def ^:private nprobe 16)
 (def ^:private threshold 0.6)
 
 (defn fraud-score!

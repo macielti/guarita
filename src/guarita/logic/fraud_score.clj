@@ -75,19 +75,41 @@
 
 (defn vectorized
   [{:keys [transaction customer merchant terminal last-transaction]}
-   normalization mcc-risk]
-  (float-array
-   [(normalize-amount transaction normalization)
-    (normalize-installments transaction normalization)
-    (normalize-amount-vs-avg transaction customer normalization)
-    (normalize-hour-of-day transaction)
-    (normalize-day-of-week transaction)
-    (normalize-minutes-since-last-tx transaction last-transaction normalization)
-    (normalize-km-from-last-tx last-transaction normalization)
-    (normalize-km-from-home terminal normalization)
-    (normalize-tx-count-24h customer normalization)
-    (normalize-is-online terminal)
-    (normalize-card-present terminal)
-    (normalize-unknown-merchant merchant customer)
-    (normalize-mcc-risk merchant mcc-risk)
-    (normalize-merchant-avg-amount merchant normalization)]))
+   {:keys [max-amount max-installments amount-vs-avg-ratio max-minutes max-km
+           max-tx-count-24h max-merchant-avg-amount]}
+   mcc-risk]
+  (let [tx-amount       (double (:amount transaction))
+        tx-installments (double (:installments transaction))
+        ^Instant tx-ts  (:requested-at transaction)
+        cust-avg-amt    (double (:avg-amount customer))
+        cust-tx-count   (double (:tx-count-24h customer))
+        known-merchants (:known-merchants customer)
+        merch-id        (:id merchant)
+        merch-mcc       (:mcc merchant)
+        merch-avg-amt   (double (:avg-amount merchant))
+        term-online?    (:online? terminal)
+        term-card?      (:card-present? terminal)
+        term-km-home    (double (:km-from-home terminal))
+        epoch-sec       (.getEpochSecond tx-ts)
+        hour            (mod (quot epoch-sec 3600) 24)
+        day             (mod (+ (quot epoch-sec 86400) 3) 7)]
+    (float-array
+     [(clamp (/ tx-amount max-amount))
+      (clamp (/ tx-installments max-installments))
+      (clamp (/ tx-amount cust-avg-amt amount-vs-avg-ratio))
+      (/ (double hour) 23.0)
+      (/ (double day) 6.0)
+      (if (nil? last-transaction)
+        -1.0
+        (clamp (/ (.toMinutes ^Duration (Duration/between (:timestamp last-transaction) tx-ts))
+                  max-minutes)))
+      (if (nil? last-transaction)
+        -1.0
+        (clamp (/ (double (:km-from-current last-transaction)) max-km)))
+      (clamp (/ term-km-home max-km))
+      (clamp (/ cust-tx-count max-tx-count-24h))
+      (if term-online? 1.0 0.0)
+      (if term-card? 1.0 0.0)
+      (if (contains? known-merchants merch-id) 0.0 1.0)
+      (double (get mcc-risk merch-mcc 0.5))
+      (clamp (/ merch-avg-amt max-merchant-avg-amount))])))
