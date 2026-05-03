@@ -1,10 +1,7 @@
-(ns guarita.adapters.customer
-  (:require [guarita.models.customer :as models.customer]
-            [guarita.wire.in.customer :as wire.in.customer]
-            [schema.core :as s]))
+(ns guarita.adapters.customer)
 
-(s/defn wire->customer :- models.customer/Customer
-  [{:keys [avg_amount tx_count_24h known_merchants]} :- wire.in.customer/Customer]
+(defn wire->customer
+  [{:keys [avg_amount tx_count_24h known_merchants]}]
   {:avg-amount      avg_amount
    :tx-count-24h    tx_count_24h
    :known-merchants (set known_merchants)})
