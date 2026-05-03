@@ -1,7 +1,7 @@
 (ns guarita.diplomat.http-server.fraud-score
   (:require [guarita.controllers.fraud-score :as controllers.fraud-score]))
 
-(def ^:private threshold 0.5)
+(def ^:private threshold 0.55)
 
 (defn fraud-score!
   [{:keys [json-params components]}]
