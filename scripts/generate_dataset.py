@@ -29,7 +29,7 @@ for i, row in enumerate(data):
 
 t1 = time.time()
 print(f'fitting KMeans(n_clusters={NLIST}) on {n} vectors...', flush=True)
-km = KMeans(n_clusters=NLIST, n_init=1, random_state=0, verbose=1)
+km = KMeans(n_clusters=NLIST, n_init=1, random_state=0)
 assignments = km.fit_predict(vectors)
 centroids = km.cluster_centers_.astype(np.float32)
 print(f'KMeans done in {time.time()-t1:.1f}s ({km.n_iter_} iterations)', flush=True)
