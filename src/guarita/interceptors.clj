@@ -1,12 +1,20 @@
 (ns guarita.interceptors
   (:require [jsonista.core :as j])
-  (:import [com.fasterxml.jackson.databind SerializationFeature]
+  (:import [com.fasterxml.jackson.core JsonFactory]
+           [com.fasterxml.jackson.core.util JsonRecyclerPools]
+           [com.fasterxml.jackson.databind SerializationFeature]
            [com.fasterxml.jackson.datatype.jsr310 JavaTimeModule]))
+
+(def ^:private ^JsonFactory factory
+  (-> (JsonFactory/builder)
+      (.recyclerPool (JsonRecyclerPools/newLockFreePool))
+      (.build)))
 
 (def mapper
   (j/object-mapper {:decode-key-fn true
                     :modules       [(JavaTimeModule.)]
-                    :features      {SerializationFeature/WRITE_DATES_AS_TIMESTAMPS false}}))
+                    :features      {SerializationFeature/WRITE_DATES_AS_TIMESTAMPS false}
+                    :factory       factory}))
 
 (def body-json-params-interceptor
   {:name  ::jsonista-body-json-params

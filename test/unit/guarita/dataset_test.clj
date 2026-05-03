@@ -4,7 +4,7 @@
             [integrant.core :as ig]
             [matcher-combinators.test :refer [match?]]
             [schema.test :as s])
-  (:import [java.nio FloatBuffer]))
+)
 
 (def ds
   (ig/init-key :guarita.dataset/dataset
@@ -12,11 +12,11 @@
                 :labels-path  "resources/labels.bin"
                 :ivf-path     "resources/ivf.bin"}))
 
-(defn- vector-at [^FloatBuffer vectors ^long i]
-  (let [start (int (* i 14))
+(defn- vector-at [^floats vectors ^long i]
+  (let [start (* i 14)
         out   (float-array 14)]
     (dotimes [k 14]
-      (aset out k (.get vectors (+ start k))))
+      (aset out k (aget vectors (+ start k))))
     out))
 
 (def query (vector-at (:vectors ds) 0))
