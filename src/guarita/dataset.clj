@@ -116,23 +116,63 @@
 
 (defn- sq-dist-buf
   ^double [^FloatBuffer vectors ^floats query ^long i ^floats scratch]
-  (let [start (int (* i 14))]
-    (.get vectors start scratch 0 14)
-    (loop [k 0 acc 0.0]
-      (if (< k 14)
-        (let [diff (- (double (aget scratch k))
-                      (double (aget query k)))]
-          (recur (inc k) (+ acc (* diff diff))))
-        acc))))
+  (let [start (int (* i 14))
+        _     (.get vectors start scratch 0 14)
+        d0  (- (double (aget scratch  0)) (double (aget query  0)))
+        d1  (- (double (aget scratch  1)) (double (aget query  1)))
+        d2  (- (double (aget scratch  2)) (double (aget query  2)))
+        d3  (- (double (aget scratch  3)) (double (aget query  3)))
+        d4  (- (double (aget scratch  4)) (double (aget query  4)))
+        d5  (- (double (aget scratch  5)) (double (aget query  5)))
+        d6  (- (double (aget scratch  6)) (double (aget query  6)))
+        d7  (- (double (aget scratch  7)) (double (aget query  7)))
+        d8  (- (double (aget scratch  8)) (double (aget query  8)))
+        d9  (- (double (aget scratch  9)) (double (aget query  9)))
+        d10 (- (double (aget scratch 10)) (double (aget query 10)))
+        d11 (- (double (aget scratch 11)) (double (aget query 11)))
+        d12 (- (double (aget scratch 12)) (double (aget query 12)))
+        d13 (- (double (aget scratch 13)) (double (aget query 13)))
+        s0  (+ (* d0  d0)  (* d1  d1))
+        s1  (+ (* d2  d2)  (* d3  d3))
+        s2  (+ (* d4  d4)  (* d5  d5))
+        s3  (+ (* d6  d6)  (* d7  d7))
+        s4  (+ (* d8  d8)  (* d9  d9))
+        s5  (+ (* d10 d10) (* d11 d11))
+        s6  (+ (* d12 d12) (* d13 d13))
+        t0  (+ s0 s1)
+        t1  (+ s2 s3)
+        t2  (+ s4 s6)
+        t3  (+ t0 t1)]
+    (+ t3 (+ t2 s5))))
 
 (defn- sq-dist-arr
   ^double [^floats centroids ^long c-off ^floats query]
-  (loop [k 0 acc 0.0]
-    (if (< k 14)
-      (let [diff (- (aget centroids (+ c-off k))
-                    (aget query k))]
-        (recur (inc k) (+ acc (* diff diff))))
-      acc)))
+  (let [d0  (- (double (aget centroids (+ c-off  0))) (double (aget query  0)))
+        d1  (- (double (aget centroids (+ c-off  1))) (double (aget query  1)))
+        d2  (- (double (aget centroids (+ c-off  2))) (double (aget query  2)))
+        d3  (- (double (aget centroids (+ c-off  3))) (double (aget query  3)))
+        d4  (- (double (aget centroids (+ c-off  4))) (double (aget query  4)))
+        d5  (- (double (aget centroids (+ c-off  5))) (double (aget query  5)))
+        d6  (- (double (aget centroids (+ c-off  6))) (double (aget query  6)))
+        d7  (- (double (aget centroids (+ c-off  7))) (double (aget query  7)))
+        d8  (- (double (aget centroids (+ c-off  8))) (double (aget query  8)))
+        d9  (- (double (aget centroids (+ c-off  9))) (double (aget query  9)))
+        d10 (- (double (aget centroids (+ c-off 10))) (double (aget query 10)))
+        d11 (- (double (aget centroids (+ c-off 11))) (double (aget query 11)))
+        d12 (- (double (aget centroids (+ c-off 12))) (double (aget query 12)))
+        d13 (- (double (aget centroids (+ c-off 13))) (double (aget query 13)))
+        s0  (+ (* d0  d0)  (* d1  d1))
+        s1  (+ (* d2  d2)  (* d3  d3))
+        s2  (+ (* d4  d4)  (* d5  d5))
+        s3  (+ (* d6  d6)  (* d7  d7))
+        s4  (+ (* d8  d8)  (* d9  d9))
+        s5  (+ (* d10 d10) (* d11 d11))
+        s6  (+ (* d12 d12) (* d13 d13))
+        t0  (+ s0 s1)
+        t1  (+ s2 s3)
+        t2  (+ s4 s6)
+        t3  (+ t0 t1)]
+    (+ t3 (+ t2 s5))))
 
 (defn- update-worst! [^doubles top-dist ^ints worst ^long k]
   (loop [j 0 max-d Double/NEGATIVE_INFINITY max-pos 0]
