@@ -17,8 +17,7 @@
                      ^ints worst
                      ^ints cl-ids
                      ^doubles cl-dist
-                     ^ints cl-worst
-                     ^shorts vec-scratch])
+                     ^ints cl-worst])
 
 (defn- make-knn-scratch ^KnnScratch [^long k ^long nprobe]
   (KnnScratch.
@@ -27,8 +26,7 @@
    (int-array 1 0)
    (int-array nprobe -1)
    (double-array nprobe Double/POSITIVE_INFINITY)
-   (int-array 1 0)
-   (short-array 14)))
+   (int-array 1 0)))
 
 ;; Default sized for k≤8, nprobe≤16 — covers all current callers without realloc.
 (def ^:private ^ThreadLocal tl-knn-scratch
@@ -116,23 +114,22 @@
   (doseq [h handles] (.close h)))
 
 (defn- sq-dist-buf
-  ^double [^ShortBuffer vectors ^floats query ^long i ^shorts scratch]
-  (let [start (int (* i 14))
-        _     (.get vectors start scratch 0 14)
-        d0  (- (* (double (aget scratch  0)) scale-inv) (double (aget query  0)))
-        d1  (- (* (double (aget scratch  1)) scale-inv) (double (aget query  1)))
-        d2  (- (* (double (aget scratch  2)) scale-inv) (double (aget query  2)))
-        d3  (- (* (double (aget scratch  3)) scale-inv) (double (aget query  3)))
-        d4  (- (* (double (aget scratch  4)) scale-inv) (double (aget query  4)))
-        d5  (- (* (double (aget scratch  5)) scale-inv) (double (aget query  5)))
-        d6  (- (* (double (aget scratch  6)) scale-inv) (double (aget query  6)))
-        d7  (- (* (double (aget scratch  7)) scale-inv) (double (aget query  7)))
-        d8  (- (* (double (aget scratch  8)) scale-inv) (double (aget query  8)))
-        d9  (- (* (double (aget scratch  9)) scale-inv) (double (aget query  9)))
-        d10 (- (* (double (aget scratch 10)) scale-inv) (double (aget query 10)))
-        d11 (- (* (double (aget scratch 11)) scale-inv) (double (aget query 11)))
-        d12 (- (* (double (aget scratch 12)) scale-inv) (double (aget query 12)))
-        d13 (- (* (double (aget scratch 13)) scale-inv) (double (aget query 13)))
+  ^double [^ShortBuffer vectors ^floats query ^long i]
+  (let [start (long (* i 14))
+        d0  (- (* (double (.get vectors (int start)))        scale-inv) (double (aget query  0)))
+        d1  (- (* (double (.get vectors (int (+ start  1)))) scale-inv) (double (aget query  1)))
+        d2  (- (* (double (.get vectors (int (+ start  2)))) scale-inv) (double (aget query  2)))
+        d3  (- (* (double (.get vectors (int (+ start  3)))) scale-inv) (double (aget query  3)))
+        d4  (- (* (double (.get vectors (int (+ start  4)))) scale-inv) (double (aget query  4)))
+        d5  (- (* (double (.get vectors (int (+ start  5)))) scale-inv) (double (aget query  5)))
+        d6  (- (* (double (.get vectors (int (+ start  6)))) scale-inv) (double (aget query  6)))
+        d7  (- (* (double (.get vectors (int (+ start  7)))) scale-inv) (double (aget query  7)))
+        d8  (- (* (double (.get vectors (int (+ start  8)))) scale-inv) (double (aget query  8)))
+        d9  (- (* (double (.get vectors (int (+ start  9)))) scale-inv) (double (aget query  9)))
+        d10 (- (* (double (.get vectors (int (+ start 10)))) scale-inv) (double (aget query 10)))
+        d11 (- (* (double (.get vectors (int (+ start 11)))) scale-inv) (double (aget query 11)))
+        d12 (- (* (double (.get vectors (int (+ start 12)))) scale-inv) (double (aget query 12)))
+        d13 (- (* (double (.get vectors (int (+ start 13)))) scale-inv) (double (aget query 13)))
         s0  (+ (* d0  d0)  (* d1  d1))
         s1  (+ (* d2  d2)  (* d3  d3))
         s2  (+ (* d4  d4)  (* d5  d5))
@@ -210,11 +207,10 @@
         ^KnnScratch s s
         ^longs top-idx (.top-idx s)
         ^doubles top-dist (.top-dist s)
-        ^ints worst (.worst s)
-        ^shorts vec-scratch (.vec-scratch s)]
+        ^ints worst (.worst s)]
     (loop [i start]
       (when (< i end)
-        (let [d (sq-dist-buf vectors query i vec-scratch)]
+        (let [d (sq-dist-buf vectors query i)]
           (when (< d (aget top-dist (aget worst 0)))
             (aset top-idx (aget worst 0) (long i))
             (aset top-dist (aget worst 0) d)
