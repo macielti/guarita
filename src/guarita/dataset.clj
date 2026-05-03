@@ -287,3 +287,32 @@
                        n))
               (recur (inc i) n)))
           n)))))
+
+(defn knn-ivf-weighted-fraud-score
+  "Returns inverse-distance-weighted fraud probability in [0.0, 1.0].
+  Closer fraud neighbors contribute more weight than distant ones."
+  [{:keys [^ByteBuffer labels ^FloatBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
+   ^floats query ^long k ^long nprobe]
+  (let [^KnnScratch s (acquire-scratch! k nprobe)]
+    (topn-clusters! centroids nlist query nprobe s)
+    (loop [ci 0]
+      (when (< ci nprobe)
+        (let [cid (aget ^ints (.cl-ids s) ci)]
+          (when (>= cid 0)
+            (knn-range! vectors query k
+                        (aget offsets cid) (aget offsets (inc cid)) s)))
+        (recur (inc ci))))
+    (let [^longs top-idx   (.top-idx s)
+          ^doubles top-dist (.top-dist s)]
+      (loop [i 0 fraud-w 0.0 total-w 0.0]
+        (if (< i k)
+          (let [d (aget top-dist i)]
+            (if (< d Double/POSITIVE_INFINITY)
+              (let [w (/ 1.0 (+ d 1.0e-6))]
+                (recur (inc i)
+                       (if (= 1 (long (.get ^ByteBuffer labels (int (aget top-idx i)))))
+                         (+ fraud-w w)
+                         fraud-w)
+                       (+ total-w w)))
+              (recur (inc i) fraud-w total-w)))
+          (if (> total-w 0.0) (/ fraud-w total-w) 0.5))))))
