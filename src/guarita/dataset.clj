@@ -8,8 +8,8 @@
 (def ^:private dim 14)
 (def ^:private bytes-per-vector (* dim 2))
 (def ^:private scale-inv (/ 1.0 8192.0))
-;; "IVF1" little-endian
-(def ^:private ivf-magic 0x31465649)
+;; "IVF2" little-endian — adds bbox_min/bbox_max sections after offsets
+(def ^:private ivf-magic 0x32465649)
 (def ^:private ivf-header-bytes 16)
 
 (deftype KnnScratch [^longs top-idx
@@ -17,41 +17,45 @@
                      ^ints worst
                      ^ints cl-ids
                      ^doubles cl-dist
-                     ^ints cl-worst])
+                     ^ints cl-worst
+                     ^bytes visited])
 
-(defn- make-knn-scratch ^KnnScratch [^long k ^long nprobe]
+(defn- make-knn-scratch ^KnnScratch [^long k ^long nprobe ^long nlist]
   (KnnScratch.
    (long-array k Long/MAX_VALUE)
    (double-array k Double/POSITIVE_INFINITY)
    (int-array 1 0)
    (int-array nprobe -1)
    (double-array nprobe Double/POSITIVE_INFINITY)
-   (int-array 1 0)))
+   (int-array 1 0)
+   (byte-array (int (max nlist 1)))))
 
 (def ^:private ^ThreadLocal tl-vec-buf
   (ThreadLocal/withInitial
    (reify java.util.function.Supplier
      (get [_] (short-array 14)))))
 
-;; Default sized for k≤8, nprobe≤16 — covers all current callers without realloc.
+;; Default sized for k≤8, nprobe≤16, nlist≤512 — covers all current callers without realloc.
 (def ^:private ^ThreadLocal tl-knn-scratch
   (ThreadLocal/withInitial
    (reify java.util.function.Supplier
-     (get [_] (atom (make-knn-scratch 8 16))))))
+     (get [_] (atom (make-knn-scratch 8 16 512))))))
 
-(defn- acquire-scratch! ^KnnScratch [^long k ^long nprobe]
+(defn- acquire-scratch! ^KnnScratch [^long k ^long nprobe ^long nlist]
   (let [cell (.get tl-knn-scratch)
         ^KnnScratch s @cell]
-    (if (and (>= (alength ^longs (.top-idx s)) k)
-             (>= (alength ^ints (.cl-ids s)) nprobe))
+    (if (and (>= (alength ^longs   (.top-idx  s)) k)
+             (>= (alength ^ints    (.cl-ids   s)) nprobe)
+             (>= (alength ^bytes   (.visited  s)) nlist))
       (do (java.util.Arrays/fill ^longs   (.top-idx  s) Long/MAX_VALUE)
           (java.util.Arrays/fill ^doubles (.top-dist s) Double/POSITIVE_INFINITY)
           (aset ^ints (.worst    s) 0 (int 0))
           (java.util.Arrays/fill ^ints    (.cl-ids   s) (int -1))
           (java.util.Arrays/fill ^doubles (.cl-dist  s) Double/POSITIVE_INFINITY)
           (aset ^ints (.cl-worst s) 0 (int 0))
+          (java.util.Arrays/fill ^bytes   (.visited  s) (byte 0))
           s)
-      (let [ns (make-knn-scratch k nprobe)]
+      (let [ns (make-knn-scratch k nprobe (max nlist 1))]
         (reset! cell ns)
         ns))))
 
@@ -77,6 +81,13 @@
       (aset out i (.getInt ivf-buf (+ base (* i 4)))))
     out))
 
+(defn- read-bbox ^shorts [^ByteBuffer ivf-buf ^long nlist ^long byte-offset]
+  (let [n   (* nlist dim)
+        out (short-array n)]
+    (dotimes [i n]
+      (aset out i (.getShort ivf-buf (int (+ byte-offset (* i 2))))))
+    out))
+
 (defmethod ig/init-key ::dataset
   [_ {:keys [vectors-path labels-path ivf-path]}]
   (log/info :starting ::dataset)
@@ -91,7 +102,11 @@
         magic   (.getInt i-buf 0)
         nlist   (.getInt i-buf 4)
         ntotal  (.getInt i-buf 8)
-        ivf-dim (.getInt i-buf 12)]
+        ivf-dim (.getInt i-buf 12)
+        centroids-bytes (long (* nlist dim 4))
+        offsets-bytes   (long (* (inc nlist) 4))
+        bbox-min-base   (long (+ ivf-header-bytes centroids-bytes offsets-bytes))
+        bbox-max-base   (long (+ bbox-min-base (* nlist dim 2)))]
     (when-not (zero? (rem v-size bytes-per-vector))
       (throw (ex-info "vectors.bin com tamanho inválido"
                       {:size v-size :expected-multiple-of bytes-per-vector})))
@@ -111,6 +126,8 @@
      :nlist     nlist
      :centroids (read-centroids i-buf nlist)
      :offsets   (read-offsets   i-buf nlist)
+     :bbox-min  (read-bbox i-buf nlist bbox-min-base)
+     :bbox-max  (read-bbox i-buf nlist bbox-max-base)
      ::handles  (concat v-handles l-handles i-handles)}))
 
 (defmethod ig/halt-key! ::dataset
@@ -121,8 +138,7 @@
 (defn- sq-dist-buf
   "Bulk-reads 14 i16 values via a single ShortBuffer.get call, then computes
   squared Euclidean distance. Checks partial distance (first 8 dims) against
-  `worst` before computing the remaining 6 dims — skips the rest when the
-  partial already exceeds the current k-NN threshold."
+  `worst` before computing the remaining 6 dims."
   ^double [^ShortBuffer vectors ^floats query ^long i ^double worst]
   (let [^shorts s (.get tl-vec-buf)
         _         (.get vectors (int (* i 14)) s 0 14)
@@ -173,7 +189,73 @@
         t1  (+ s2 s3)
         t2  (+ s4 s6)
         t3  (+ t0 t1)]
-    (+ t3 (+ t2 s5))))
+    (+ t3 t2 s5)))
+
+(defn- bbox-lower-sq
+  "Minimum possible squared distance from query to any point in cluster c's bounding box.
+  Per dim: 0 if query is inside [bmin,bmax], else squared distance to the nearer bound."
+  ^double [^shorts bbox-min ^shorts bbox-max ^long c ^floats query]
+  (let [off (int (* c dim))
+        q0   (double (aget query  0))
+        q1   (double (aget query  1))
+        q2   (double (aget query  2))
+        q3   (double (aget query  3))
+        q4   (double (aget query  4))
+        q5   (double (aget query  5))
+        q6   (double (aget query  6))
+        q7   (double (aget query  7))
+        q8   (double (aget query  8))
+        q9   (double (aget query  9))
+        q10  (double (aget query 10))
+        q11  (double (aget query 11))
+        q12  (double (aget query 12))
+        q13  (double (aget query 13))
+        mn0  (* (double (int (aget bbox-min (+ off  0)))) scale-inv)
+        mn1  (* (double (int (aget bbox-min (+ off  1)))) scale-inv)
+        mn2  (* (double (int (aget bbox-min (+ off  2)))) scale-inv)
+        mn3  (* (double (int (aget bbox-min (+ off  3)))) scale-inv)
+        mn4  (* (double (int (aget bbox-min (+ off  4)))) scale-inv)
+        mn5  (* (double (int (aget bbox-min (+ off  5)))) scale-inv)
+        mn6  (* (double (int (aget bbox-min (+ off  6)))) scale-inv)
+        mn7  (* (double (int (aget bbox-min (+ off  7)))) scale-inv)
+        mn8  (* (double (int (aget bbox-min (+ off  8)))) scale-inv)
+        mn9  (* (double (int (aget bbox-min (+ off  9)))) scale-inv)
+        mn10 (* (double (int (aget bbox-min (+ off 10)))) scale-inv)
+        mn11 (* (double (int (aget bbox-min (+ off 11)))) scale-inv)
+        mn12 (* (double (int (aget bbox-min (+ off 12)))) scale-inv)
+        mn13 (* (double (int (aget bbox-min (+ off 13)))) scale-inv)
+        mx0  (* (double (int (aget bbox-max (+ off  0)))) scale-inv)
+        mx1  (* (double (int (aget bbox-max (+ off  1)))) scale-inv)
+        mx2  (* (double (int (aget bbox-max (+ off  2)))) scale-inv)
+        mx3  (* (double (int (aget bbox-max (+ off  3)))) scale-inv)
+        mx4  (* (double (int (aget bbox-max (+ off  4)))) scale-inv)
+        mx5  (* (double (int (aget bbox-max (+ off  5)))) scale-inv)
+        mx6  (* (double (int (aget bbox-max (+ off  6)))) scale-inv)
+        mx7  (* (double (int (aget bbox-max (+ off  7)))) scale-inv)
+        mx8  (* (double (int (aget bbox-max (+ off  8)))) scale-inv)
+        mx9  (* (double (int (aget bbox-max (+ off  9)))) scale-inv)
+        mx10 (* (double (int (aget bbox-max (+ off 10)))) scale-inv)
+        mx11 (* (double (int (aget bbox-max (+ off 11)))) scale-inv)
+        mx12 (* (double (int (aget bbox-max (+ off 12)))) scale-inv)
+        mx13 (* (double (int (aget bbox-max (+ off 13)))) scale-inv)
+        d0   (if (< q0  mn0)  (- mn0  q0)  (if (> q0  mx0)  (- q0  mx0)  0.0))
+        d1   (if (< q1  mn1)  (- mn1  q1)  (if (> q1  mx1)  (- q1  mx1)  0.0))
+        d2   (if (< q2  mn2)  (- mn2  q2)  (if (> q2  mx2)  (- q2  mx2)  0.0))
+        d3   (if (< q3  mn3)  (- mn3  q3)  (if (> q3  mx3)  (- q3  mx3)  0.0))
+        d4   (if (< q4  mn4)  (- mn4  q4)  (if (> q4  mx4)  (- q4  mx4)  0.0))
+        d5   (if (< q5  mn5)  (- mn5  q5)  (if (> q5  mx5)  (- q5  mx5)  0.0))
+        d6   (if (< q6  mn6)  (- mn6  q6)  (if (> q6  mx6)  (- q6  mx6)  0.0))
+        d7   (if (< q7  mn7)  (- mn7  q7)  (if (> q7  mx7)  (- q7  mx7)  0.0))
+        d8   (if (< q8  mn8)  (- mn8  q8)  (if (> q8  mx8)  (- q8  mx8)  0.0))
+        d9   (if (< q9  mn9)  (- mn9  q9)  (if (> q9  mx9)  (- q9  mx9)  0.0))
+        d10  (if (< q10 mn10) (- mn10 q10) (if (> q10 mx10) (- q10 mx10) 0.0))
+        d11  (if (< q11 mn11) (- mn11 q11) (if (> q11 mx11) (- q11 mx11) 0.0))
+        d12  (if (< q12 mn12) (- mn12 q12) (if (> q12 mx12) (- q12 mx12) 0.0))
+        d13  (if (< q13 mn13) (- mn13 q13) (if (> q13 mx13) (- q13 mx13) 0.0))]
+    (+ (* d0 d0) (* d1 d1) (* d2 d2) (* d3 d3)
+       (* d4 d4) (* d5 d5) (* d6 d6) (* d7 d7)
+       (* d8 d8) (* d9 d9) (* d10 d10) (* d11 d11)
+       (* d12 d12) (* d13 d13))))
 
 (defn- update-worst! [^doubles top-dist ^ints worst ^long k]
   (loop [j 0 max-d Double/NEGATIVE_INFINITY max-pos 0]
@@ -255,7 +337,7 @@
 (defn knn
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
   [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^long n]} ^floats query ^long k]
-  (let [^KnnScratch s (acquire-scratch! k 16)]
+  (let [^KnnScratch s (acquire-scratch! k 16 1)]
     (knn-range! vectors query k 0 n s)
     (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
 
@@ -265,7 +347,7 @@
   cluster scan is a tight loop over a flat slice of the mmap."
   [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
-  (let [^KnnScratch s (acquire-scratch! k nprobe)]
+  (let [^KnnScratch s (acquire-scratch! k nprobe 1)]
     (topn-clusters! centroids nlist query nprobe s)
     (loop [ci 0]
       (when (< ci nprobe)
@@ -289,47 +371,54 @@
       n)))
 
 (defn knn-ivf-fraud-count
-  "Staged IVF k-NN fraud count.
-  Fast probe (nprobe-fast clusters); if result is borderline — where one
-  more or fewer fraud neighbor would flip the approve/deny decision — runs
-  additional clusters up to nprobe-full for higher recall on edge cases."
-  [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
-   ^floats query k nprobe-fast nprobe-full]
-  (let [k           (long k)
-        nprobe-fast (long nprobe-fast)
-        nprobe-full (long nprobe-full)
-        ^KnnScratch s (acquire-scratch! k nprobe-full)
-        ^ints cl-ids  (.cl-ids s)
-        ^ints offsets offsets
-        threshold     (int (Math/ceil (* 0.6 (double k))))]
-    (topn-clusters! centroids nlist query nprobe-full s)
-    (sort-cl-ids-by-dist! cl-ids (.cl-dist s) nprobe-full)
+  "IVF k-NN fraud count with bounding-box repair.
+  Scans the nprobe nearest clusters first (fast path), then checks every
+  remaining cluster via its axis-aligned bounding box: if the minimum possible
+  squared distance from the query to the bbox is ≤ current worst neighbor
+  distance, that cluster is also scanned. This guarantees no neighbor closer
+  than the current worst is skipped, giving near-exact recall with adaptive
+  cost."
+  [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets
+           ^shorts bbox-min ^shorts bbox-max ^long nlist]}
+   ^floats query k nprobe]
+  (let [k      (long k)
+        nprobe (long nprobe)
+        ^KnnScratch s  (acquire-scratch! k nprobe nlist)
+        ^ints cl-ids   (.cl-ids s)
+        ^ints offsets  offsets
+        ^bytes visited (.visited s)]
+    (topn-clusters! centroids nlist query nprobe s)
+    (sort-cl-ids-by-dist! cl-ids (.cl-dist s) nprobe)
+    ;; Scan top-nprobe clusters and mark them visited
     (loop [ci 0]
-      (when (< ci nprobe-fast)
+      (when (< ci nprobe)
         (let [cid (aget cl-ids ci)]
           (when (>= cid 0)
+            (aset visited cid (byte 1))
             (knn-range! vectors query k
                         (aget offsets cid) (aget offsets (inc cid)) s)))
         (recur (inc ci))))
-    (let [fast-count (count-fraud labels (.top-idx s) (.top-dist s) k)]
-      (if (or (= fast-count (dec threshold)) (= fast-count threshold))
-        (do
-          (loop [ci nprobe-fast]
-            (when (< ci nprobe-full)
-              (let [cid (aget cl-ids ci)]
-                (when (>= cid 0)
-                  (knn-range! vectors query k
-                              (aget offsets cid) (aget offsets (inc cid)) s)))
-              (recur (inc ci))))
-          (count-fraud labels (.top-idx s) (.top-dist s) k))
-        fast-count))))
+    ;; Bbox repair: scan any unvisited cluster whose bbox lower bound
+    ;; is ≤ current worst neighbor distance (could contain a better neighbor)
+    (let [^doubles top-dist (.top-dist s)
+          ^ints worst       (.worst s)]
+      (loop [c 0]
+        (when (< c nlist)
+          (when (zero? (aget visited c))
+            (let [w  (aget top-dist (aget worst 0))
+                  lb (bbox-lower-sq bbox-min bbox-max c query)]
+              (when (<= lb w)
+                (knn-range! vectors query k
+                            (aget offsets c) (aget offsets (inc c)) s))))
+          (recur (inc c)))))
+    (count-fraud labels (.top-idx s) (.top-dist s) k)))
 
 (defn knn-ivf-weighted-fraud-score
   "Returns inverse-distance-weighted fraud probability in [0.0, 1.0].
   Closer fraud neighbors contribute more weight than distant ones."
   [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
-  (let [^KnnScratch s (acquire-scratch! k nprobe)]
+  (let [^KnnScratch s (acquire-scratch! k nprobe 1)]
     (topn-clusters! centroids nlist query nprobe s)
     (loop [ci 0]
       (when (< ci nprobe)
