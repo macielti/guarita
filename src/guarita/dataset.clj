@@ -3,7 +3,7 @@
             [taoensso.timbre :as log])
   (:import [guarita SIMDKernel]
            [java.io RandomAccessFile]
-           [java.nio ByteBuffer ByteOrder ShortBuffer]
+           [java.nio ByteBuffer ByteOrder MappedByteBuffer ShortBuffer]
            [java.nio.channels FileChannel$MapMode]))
 
 (def ^:private dim 14)
@@ -124,6 +124,7 @@
     (when-not (and (= ntotal n) (= ivf-dim dim))
       (throw (ex-info "ivf.bin: cabeçalho não confere com vectors.bin"
                       {:ivf-ntotal ntotal :n n :ivf-dim ivf-dim :dim dim})))
+    (.load ^MappedByteBuffer v-buf)
     {:vectors   vectors
      :labels    l-buf
      :n         n
