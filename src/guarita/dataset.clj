@@ -9,7 +9,6 @@
 (def ^:private dim 14)
 (def ^:private simd-stride 16)
 (def ^:private bytes-per-vector (* dim 2))
-(def ^:private scale-inv (/ 1.0 8192.0))
 ;; "IVF2" little-endian — adds bbox_min/bbox_max sections after offsets
 (def ^:private ivf-magic 0x32465649)
 (def ^:private ivf-header-bytes 16)
