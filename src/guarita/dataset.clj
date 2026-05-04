@@ -201,6 +201,20 @@
             (update-worst! cl-dist cl-worst nprobe)))
         (recur (inc c))))))
 
+(defn- sort-cl-ids-by-dist! [^ints cl-ids ^doubles cl-dist ^long nprobe]
+  (loop [i 1]
+    (when (< i nprobe)
+      (let [ki (aget cl-ids i)
+            kd (aget cl-dist i)]
+        (loop [j (dec i)]
+          (if (and (>= j 0) (> (aget cl-dist j) kd))
+            (do (aset cl-ids  (inc j) (aget cl-ids j))
+                (aset cl-dist (inc j) (aget cl-dist j))
+                (recur (dec j)))
+            (do (aset cl-ids  (inc j) ki)
+                (aset cl-dist (inc j) kd)))))
+      (recur (inc i)))))
+
 (defn- knn-range! [vectors query k start end s]
   (let [^ShortBuffer vectors vectors
         ^floats query query
@@ -289,6 +303,7 @@
         ^ints offsets offsets
         threshold     (int (Math/ceil (* 0.6 (double k))))]
     (topn-clusters! centroids nlist query nprobe-full s)
+    (sort-cl-ids-by-dist! cl-ids (.cl-dist s) nprobe-full)
     (loop [ci 0]
       (when (< ci nprobe-fast)
         (let [cid (aget cl-ids ci)]
