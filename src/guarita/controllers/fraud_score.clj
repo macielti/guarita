@@ -4,7 +4,10 @@
             [guarita.logic.fraud-score :as logic.fraud-score]))
 
 (def ^:private k 5)
-(def ^:private nprobe 8)
+
+(def ^:private nprobe
+  (let [v (System/getenv "IVF_NPROBE")]
+    (if v (Long/parseLong v) 8)))
 
 (defn fraud-score!
   ^double [wire-input {:keys [config dataset]}]
