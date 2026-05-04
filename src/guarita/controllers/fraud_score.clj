@@ -10,7 +10,7 @@
 ;; run a bbox repair pass over unvisited clusters. Default: 7.
 (def ^:private nprobe-fast
   (let [v (System/getenv "IVF_NPROBE")]
-    (if v (Long/parseLong v) 7)))
+    (if v (Long/parseLong v) 5)))
 
 (defn fraud-score!
   ^double [wire-input {:keys [config dataset]}]
