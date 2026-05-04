@@ -371,47 +371,50 @@
       n)))
 
 (defn knn-ivf-fraud-count
-  "IVF k-NN fraud count with bounding-box repair.
-  Scans the nprobe nearest clusters first (fast path), then checks every
-  remaining cluster via its axis-aligned bounding box: if the minimum possible
-  squared distance from the query to the bbox is ≤ current worst neighbor
-  distance, that cluster is also scanned. This guarantees no neighbor closer
-  than the current worst is skipped, giving near-exact recall with adaptive
-  cost."
+  "Staged IVF k-NN fraud count with bounding-box repair on borderline queries.
+  Fast probe scans nprobe-fast nearest clusters. If the result is borderline
+  — one more or fewer fraud neighbor would flip the decision — runs a bbox
+  repair pass over all unvisited clusters: any cluster whose bounding-box
+  lower bound ≤ current worst neighbor distance is scanned. Clear-cut
+  queries pay only the fast-probe cost."
   [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets
            ^shorts bbox-min ^shorts bbox-max ^long nlist]}
-   ^floats query k nprobe]
-  (let [k      (long k)
-        nprobe (long nprobe)
-        ^KnnScratch s  (acquire-scratch! k nprobe nlist)
+   ^floats query k nprobe-fast]
+  (let [k          (long k)
+        nprobe-fast (long nprobe-fast)
+        threshold   (int (Math/ceil (* 0.6 (double k))))
+        ^KnnScratch s  (acquire-scratch! k nprobe-fast nlist)
         ^ints cl-ids   (.cl-ids s)
         ^ints offsets  offsets
         ^bytes visited (.visited s)]
-    (topn-clusters! centroids nlist query nprobe s)
-    (sort-cl-ids-by-dist! cl-ids (.cl-dist s) nprobe)
-    ;; Scan top-nprobe clusters and mark them visited
+    (topn-clusters! centroids nlist query nprobe-fast s)
+    (sort-cl-ids-by-dist! cl-ids (.cl-dist s) nprobe-fast)
+    ;; Fast probe: scan top-nprobe-fast clusters, mark visited
     (loop [ci 0]
-      (when (< ci nprobe)
+      (when (< ci nprobe-fast)
         (let [cid (aget cl-ids ci)]
           (when (>= cid 0)
             (aset visited cid (byte 1))
             (knn-range! vectors query k
                         (aget offsets cid) (aget offsets (inc cid)) s)))
         (recur (inc ci))))
-    ;; Bbox repair: scan any unvisited cluster whose bbox lower bound
-    ;; is ≤ current worst neighbor distance (could contain a better neighbor)
-    (let [^doubles top-dist (.top-dist s)
-          ^ints worst       (.worst s)]
-      (loop [c 0]
-        (when (< c nlist)
-          (when (zero? (aget visited c))
-            (let [w  (aget top-dist (aget worst 0))
-                  lb (bbox-lower-sq bbox-min bbox-max c query)]
-              (when (<= lb w)
-                (knn-range! vectors query k
-                            (aget offsets c) (aget offsets (inc c)) s))))
-          (recur (inc c)))))
-    (count-fraud labels (.top-idx s) (.top-dist s) k)))
+    (let [fast-count (count-fraud labels (.top-idx s) (.top-dist s) k)]
+      ;; Bbox repair only for borderline queries where one extra neighbor
+      ;; could flip the approve/deny decision
+      (if (or (= fast-count (dec threshold)) (= fast-count threshold))
+        (let [^doubles top-dist (.top-dist s)
+              ^ints worst       (.worst s)]
+          (loop [c 0]
+            (when (< c nlist)
+              (when (zero? (aget visited c))
+                (let [w  (aget top-dist (aget worst 0))
+                      lb (bbox-lower-sq bbox-min bbox-max c query)]
+                  (when (<= lb w)
+                    (knn-range! vectors query k
+                                (aget offsets c) (aget offsets (inc c)) s))))
+              (recur (inc c))))
+          (count-fraud labels (.top-idx s) (.top-dist s) k))
+        fast-count))))
 
 (defn knn-ivf-weighted-fraud-score
   "Returns inverse-distance-weighted fraud probability in [0.0, 1.0].
