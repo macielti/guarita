@@ -112,7 +112,9 @@
       (if term-card? 1.0 0.0)
       (if (contains? known-merchants merch-id) 0.0 1.0)
       (double (get mcc-risk merch-mcc 0.5))
-      (clamp (/ merch-avg-amt max-merchant-avg-amount))])))
+      (clamp (/ merch-avg-amt max-merchant-avg-amount))
+      0.0
+      0.0])))
 
 (defn vectorized-from-wire
   "Compute feature vector directly from raw JSON-parsed wire map, skipping adapter allocation."
@@ -154,4 +156,6 @@
       (if term-card? 1.0 0.0)
       (if (.contains known-merchants merch-id) 0.0 1.0)
       (double (get mcc-risk merch-mcc 0.5))
-      (clamp (/ merch-avg-amt max-merchant-avg-amount))])))
+      (clamp (/ merch-avg-amt max-merchant-avg-amount))
+      0.0
+      0.0])))

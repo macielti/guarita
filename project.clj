@@ -21,7 +21,11 @@
                  ;GraalVM native image building
                  [com.github.clj-easy/graal-build-time "1.0.5"]]
 
-  :jvm-opts ["-Djdk.attach.allowAttachSelf" "-XX:+UnlockDiagnosticVMOptions" "-XX:+DebugNonSafepoints"]
+  :jvm-opts ["-Djdk.attach.allowAttachSelf" "-XX:+UnlockDiagnosticVMOptions" "-XX:+DebugNonSafepoints"
+             "--add-modules=jdk.incubator.vector"]
+
+  :java-source-paths ["java"]
+  :javac-options ["--add-modules=jdk.incubator.vector"]
 
   :resource-paths ["resources"]
 
@@ -56,6 +60,7 @@
                                                     "--enable-url-protocols=http,https"
                                                     "-O3"
                                                     "-march=compatibility"
+                                                    "--add-modules=jdk.incubator.vector"
                                                     "--initialize-at-build-time"
                                                     "--initialize-at-run-time=io.prometheus.client.Striped64"
 
