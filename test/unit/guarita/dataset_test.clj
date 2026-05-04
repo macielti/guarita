@@ -16,7 +16,7 @@
 
 (defn- vector-at [^ShortBuffer vectors ^long i]
   (let [start (int (* i 14))
-        out   (float-array 14)]
+        out   (float-array 16)]
     (dotimes [k 14]
       (aset out k (float (* (double (int (.get vectors (+ start k)))) scale-inv))))
     out))

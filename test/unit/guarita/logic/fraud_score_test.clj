@@ -747,7 +747,7 @@
   {"7802" 0.75})
 
 (s/deftest vectorized-no-last-transaction-test
-  (testing "it should return a 14-element vector with nil sentinels at indices 5 and 6 when last-transaction is nil"
+  (testing "it should return a 16-element vector with nil sentinels at indices 5 and 6 when last-transaction is nil"
     (let [fraud-score (helpers.schema/generate models.fraud-score/FraudScore
                                                {:transaction vectorized-spec-transaction
                                                 :customer    vectorized-spec-customer
@@ -755,7 +755,7 @@
                                                 :terminal    vectorized-spec-terminal}
                                                {})
           result (logic.fraud-score/vectorized fraud-score vectorized-spec-normalization vectorized-spec-mcc-risk)]
-      (is (= 14 (count result)))
+      (is (= 16 (count result)))
       (is (= -1.0 (nth result 5)))
       (is (= -1.0 (nth result 6)))
       (is (= 0.0 (nth result 9)))
@@ -772,7 +772,7 @@
       (is (< (Math/abs (- (nth result 13) 0.005486)) 0.0001)))))
 
 (s/deftest vectorized-with-last-transaction-test
-  (testing "it should return a 14-element vector with real values at indices 5 and 6 when last-transaction is present"
+  (testing "it should return a 16-element vector with real values at indices 5 and 6 when last-transaction is present"
     (let [fraud-score (helpers.schema/generate models.fraud-score/FraudScore
                                                {:transaction      vectorized-spec-transaction
                                                 :customer         vectorized-spec-customer
@@ -782,7 +782,7 @@
                                                                    :km-from-current 50.0}}
                                                {})
           result (logic.fraud-score/vectorized fraud-score vectorized-spec-normalization vectorized-spec-mcc-risk)]
-      (is (= 14 (count result)))
+      (is (= 16 (count result)))
       (is (< (Math/abs (- (nth result 5) 0.010417)) 0.0001))
       (is (< (Math/abs (- (nth result 6) 0.05)) 0.0001))
       (is (= 0.0 (nth result 9)))
