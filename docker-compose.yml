@@ -17,7 +17,7 @@ services:
           memory: "50MB"
 
   api1:
-    image: ghcr.io/macielti/guarita:sha-16bf311
+    image: ghcr.io/macielti/guarita:sha-7c389ec
     container_name: guarita_api1
     restart: unless-stopped
     volumes:
@@ -29,7 +29,7 @@ services:
           memory: "150MB"
 
   api2:
-    image: ghcr.io/macielti/guarita:sha-16bf311
+    image: ghcr.io/macielti/guarita:sha-7c389ec
     container_name: guarita_api2
     restart: unless-stopped
     volumes:
