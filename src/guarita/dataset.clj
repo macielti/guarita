@@ -35,11 +35,11 @@
    (reify java.util.function.Supplier
      (get [_] (short-array 14)))))
 
-;; Default sized for k≤8, nprobe≤16, nlist≤512 — covers all current callers without realloc.
+;; Default sized for k≤8, nprobe≤16, nlist≤2048 — covers all current callers without realloc.
 (def ^:private ^ThreadLocal tl-knn-scratch
   (ThreadLocal/withInitial
    (reify java.util.function.Supplier
-     (get [_] (atom (make-knn-scratch 8 16 512))))))
+     (get [_] (atom (make-knn-scratch 8 16 2048))))))
 
 (defn- acquire-scratch! ^KnnScratch [^long k ^long nprobe ^long nlist]
   (let [cell (.get tl-knn-scratch)

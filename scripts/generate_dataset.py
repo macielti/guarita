@@ -10,7 +10,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 
 URL = 'https://github.com/zanfranceschi/rinha-de-backend-2026/raw/main/resources/references.json.gz'
-NLIST = 256
+NLIST = 1700
 DIM = 14
 IVF_MAGIC = 0x32465649  # 'IVF2' little-endian
 
