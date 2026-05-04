@@ -1,13 +1,11 @@
 (ns guarita.dataset
   (:require [integrant.core :as ig]
             [taoensso.timbre :as log])
-  (:import [guarita SIMDKernel]
-           [java.io RandomAccessFile]
-           [java.nio ByteBuffer ByteOrder MappedByteBuffer ShortBuffer]
+  (:import [java.io RandomAccessFile]
+           [java.nio ByteBuffer ByteOrder ShortBuffer]
            [java.nio.channels FileChannel$MapMode]))
 
 (def ^:private dim 14)
-(def ^:private simd-stride 16)
 (def ^:private bytes-per-vector (* dim 2))
 (def ^:private scale-inv (/ 1.0 8192.0))
 ;; "IVF2" little-endian — adds bbox_min/bbox_max sections after offsets
@@ -35,7 +33,7 @@
 (def ^:private ^ThreadLocal tl-vec-buf
   (ThreadLocal/withInitial
    (reify java.util.function.Supplier
-     (get [_] (short-array 16)))))
+     (get [_] (short-array 14)))))
 
 ;; Default sized for k≤8, nprobe≤16, nlist≤2048 — covers all current callers without realloc.
 (def ^:private ^ThreadLocal tl-knn-scratch
@@ -70,11 +68,10 @@
     {:buffer bb :handles [ch f] :size sz}))
 
 (defn- read-centroids ^floats [^ByteBuffer ivf-buf ^long nlist]
-  (let [out (float-array (* nlist simd-stride))]
-    (dotimes [c nlist]
-      (dotimes [d dim]
-        (aset out (+ (* c simd-stride) d)
-              (.getFloat ivf-buf (int (+ ivf-header-bytes (* (+ (* c dim) d) 4)))))))
+  (let [n   (* nlist dim)
+        out (float-array n)]
+    (dotimes [i n]
+      (aset out i (.getFloat ivf-buf (+ ivf-header-bytes (* i 4)))))
     out))
 
 (defn- read-offsets ^ints [^ByteBuffer ivf-buf ^long nlist]
@@ -85,11 +82,10 @@
     out))
 
 (defn- read-bbox ^shorts [^ByteBuffer ivf-buf ^long nlist ^long byte-offset]
-  (let [out (short-array (* nlist simd-stride))]
-    (dotimes [c nlist]
-      (dotimes [d dim]
-        (aset out (+ (* c simd-stride) d)
-              (.getShort ivf-buf (int (+ byte-offset (* (+ (* c dim) d) 2)))))))
+  (let [n   (* nlist dim)
+        out (short-array n)]
+    (dotimes [i n]
+      (aset out i (.getShort ivf-buf (int (+ byte-offset (* i 2))))))
     out))
 
 (defmethod ig/init-key ::dataset
@@ -124,7 +120,6 @@
     (when-not (and (= ntotal n) (= ivf-dim dim))
       (throw (ex-info "ivf.bin: cabeçalho não confere com vectors.bin"
                       {:ivf-ntotal ntotal :n n :ivf-dim ivf-dim :dim dim})))
-    (.load ^MappedByteBuffer v-buf)
     {:vectors   vectors
      :labels    l-buf
      :n         n
@@ -140,16 +135,127 @@
   (log/info :stopping ::dataset)
   (doseq [^java.io.Closeable h handles] (.close h)))
 
-(defn- sq-dist-buf [^ShortBuffer vectors ^floats query i _worst]
+(defn- sq-dist-buf
+  "Bulk-reads 14 i16 values via a single ShortBuffer.get call, then computes
+  squared Euclidean distance. Checks partial distance (first 8 dims) against
+  `worst` before computing the remaining 6 dims."
+  ^double [^ShortBuffer vectors ^floats query ^long i ^double worst]
   (let [^shorts s (.get tl-vec-buf)
-        _         (.get vectors (int (* (long i) 14)) s 0 14)]
-    (double (SIMDKernel/sqDistShorts s query))))
+        _         (.get vectors (int (* i 14)) s 0 14)
+        d0  (- (* (double (int (aget s  0))) scale-inv) (double (aget query  0)))
+        d1  (- (* (double (int (aget s  1))) scale-inv) (double (aget query  1)))
+        d2  (- (* (double (int (aget s  2))) scale-inv) (double (aget query  2)))
+        d3  (- (* (double (int (aget s  3))) scale-inv) (double (aget query  3)))
+        d4  (- (* (double (int (aget s  4))) scale-inv) (double (aget query  4)))
+        d5  (- (* (double (int (aget s  5))) scale-inv) (double (aget query  5)))
+        d6  (- (* (double (int (aget s  6))) scale-inv) (double (aget query  6)))
+        d7  (- (* (double (int (aget s  7))) scale-inv) (double (aget query  7)))
+        partial (+ (* d0 d0) (* d1 d1) (* d2 d2) (* d3 d3)
+                   (* d4 d4) (* d5 d5) (* d6 d6) (* d7 d7))]
+    (if (>= partial worst)
+      Double/POSITIVE_INFINITY
+      (let [d8  (- (* (double (int (aget s  8))) scale-inv) (double (aget query  8)))
+            d9  (- (* (double (int (aget s  9))) scale-inv) (double (aget query  9)))
+            d10 (- (* (double (int (aget s 10))) scale-inv) (double (aget query 10)))
+            d11 (- (* (double (int (aget s 11))) scale-inv) (double (aget query 11)))
+            d12 (- (* (double (int (aget s 12))) scale-inv) (double (aget query 12)))
+            d13 (- (* (double (int (aget s 13))) scale-inv) (double (aget query 13)))]
+        (+ partial (* d8 d8) (* d9 d9) (* d10 d10) (* d11 d11) (* d12 d12) (* d13 d13))))))
 
-(defn- sq-dist-arr [^floats centroids c-off ^floats query]
-  (double (SIMDKernel/sqDistCentroids centroids (int (long c-off)) query)))
+(defn- sq-dist-arr
+  ^double [^floats centroids ^long c-off ^floats query]
+  (let [d0  (- (double (aget centroids (+ c-off  0))) (double (aget query  0)))
+        d1  (- (double (aget centroids (+ c-off  1))) (double (aget query  1)))
+        d2  (- (double (aget centroids (+ c-off  2))) (double (aget query  2)))
+        d3  (- (double (aget centroids (+ c-off  3))) (double (aget query  3)))
+        d4  (- (double (aget centroids (+ c-off  4))) (double (aget query  4)))
+        d5  (- (double (aget centroids (+ c-off  5))) (double (aget query  5)))
+        d6  (- (double (aget centroids (+ c-off  6))) (double (aget query  6)))
+        d7  (- (double (aget centroids (+ c-off  7))) (double (aget query  7)))
+        d8  (- (double (aget centroids (+ c-off  8))) (double (aget query  8)))
+        d9  (- (double (aget centroids (+ c-off  9))) (double (aget query  9)))
+        d10 (- (double (aget centroids (+ c-off 10))) (double (aget query 10)))
+        d11 (- (double (aget centroids (+ c-off 11))) (double (aget query 11)))
+        d12 (- (double (aget centroids (+ c-off 12))) (double (aget query 12)))
+        d13 (- (double (aget centroids (+ c-off 13))) (double (aget query 13)))
+        s0  (+ (* d0  d0)  (* d1  d1))
+        s1  (+ (* d2  d2)  (* d3  d3))
+        s2  (+ (* d4  d4)  (* d5  d5))
+        s3  (+ (* d6  d6)  (* d7  d7))
+        s4  (+ (* d8  d8)  (* d9  d9))
+        s5  (+ (* d10 d10) (* d11 d11))
+        s6  (+ (* d12 d12) (* d13 d13))
+        t0  (+ s0 s1)
+        t1  (+ s2 s3)
+        t2  (+ s4 s6)
+        t3  (+ t0 t1)]
+    (+ t3 t2 s5)))
 
-(defn- bbox-lower-sq [^shorts bbox-min ^shorts bbox-max c ^floats query]
-  (double (SIMDKernel/bboxLowerSq bbox-min bbox-max (int (* (long c) simd-stride)) query)))
+(defn- bbox-lower-sq
+  "Minimum possible squared distance from query to any point in cluster c's bounding box.
+  Per dim: 0 if query is inside [bmin,bmax], else squared distance to the nearer bound."
+  ^double [^shorts bbox-min ^shorts bbox-max ^long c ^floats query]
+  (let [off (int (* c dim))
+        q0   (double (aget query  0))
+        q1   (double (aget query  1))
+        q2   (double (aget query  2))
+        q3   (double (aget query  3))
+        q4   (double (aget query  4))
+        q5   (double (aget query  5))
+        q6   (double (aget query  6))
+        q7   (double (aget query  7))
+        q8   (double (aget query  8))
+        q9   (double (aget query  9))
+        q10  (double (aget query 10))
+        q11  (double (aget query 11))
+        q12  (double (aget query 12))
+        q13  (double (aget query 13))
+        mn0  (* (double (int (aget bbox-min (+ off  0)))) scale-inv)
+        mn1  (* (double (int (aget bbox-min (+ off  1)))) scale-inv)
+        mn2  (* (double (int (aget bbox-min (+ off  2)))) scale-inv)
+        mn3  (* (double (int (aget bbox-min (+ off  3)))) scale-inv)
+        mn4  (* (double (int (aget bbox-min (+ off  4)))) scale-inv)
+        mn5  (* (double (int (aget bbox-min (+ off  5)))) scale-inv)
+        mn6  (* (double (int (aget bbox-min (+ off  6)))) scale-inv)
+        mn7  (* (double (int (aget bbox-min (+ off  7)))) scale-inv)
+        mn8  (* (double (int (aget bbox-min (+ off  8)))) scale-inv)
+        mn9  (* (double (int (aget bbox-min (+ off  9)))) scale-inv)
+        mn10 (* (double (int (aget bbox-min (+ off 10)))) scale-inv)
+        mn11 (* (double (int (aget bbox-min (+ off 11)))) scale-inv)
+        mn12 (* (double (int (aget bbox-min (+ off 12)))) scale-inv)
+        mn13 (* (double (int (aget bbox-min (+ off 13)))) scale-inv)
+        mx0  (* (double (int (aget bbox-max (+ off  0)))) scale-inv)
+        mx1  (* (double (int (aget bbox-max (+ off  1)))) scale-inv)
+        mx2  (* (double (int (aget bbox-max (+ off  2)))) scale-inv)
+        mx3  (* (double (int (aget bbox-max (+ off  3)))) scale-inv)
+        mx4  (* (double (int (aget bbox-max (+ off  4)))) scale-inv)
+        mx5  (* (double (int (aget bbox-max (+ off  5)))) scale-inv)
+        mx6  (* (double (int (aget bbox-max (+ off  6)))) scale-inv)
+        mx7  (* (double (int (aget bbox-max (+ off  7)))) scale-inv)
+        mx8  (* (double (int (aget bbox-max (+ off  8)))) scale-inv)
+        mx9  (* (double (int (aget bbox-max (+ off  9)))) scale-inv)
+        mx10 (* (double (int (aget bbox-max (+ off 10)))) scale-inv)
+        mx11 (* (double (int (aget bbox-max (+ off 11)))) scale-inv)
+        mx12 (* (double (int (aget bbox-max (+ off 12)))) scale-inv)
+        mx13 (* (double (int (aget bbox-max (+ off 13)))) scale-inv)
+        d0   (if (< q0  mn0)  (- mn0  q0)  (if (> q0  mx0)  (- q0  mx0)  0.0))
+        d1   (if (< q1  mn1)  (- mn1  q1)  (if (> q1  mx1)  (- q1  mx1)  0.0))
+        d2   (if (< q2  mn2)  (- mn2  q2)  (if (> q2  mx2)  (- q2  mx2)  0.0))
+        d3   (if (< q3  mn3)  (- mn3  q3)  (if (> q3  mx3)  (- q3  mx3)  0.0))
+        d4   (if (< q4  mn4)  (- mn4  q4)  (if (> q4  mx4)  (- q4  mx4)  0.0))
+        d5   (if (< q5  mn5)  (- mn5  q5)  (if (> q5  mx5)  (- q5  mx5)  0.0))
+        d6   (if (< q6  mn6)  (- mn6  q6)  (if (> q6  mx6)  (- q6  mx6)  0.0))
+        d7   (if (< q7  mn7)  (- mn7  q7)  (if (> q7  mx7)  (- q7  mx7)  0.0))
+        d8   (if (< q8  mn8)  (- mn8  q8)  (if (> q8  mx8)  (- q8  mx8)  0.0))
+        d9   (if (< q9  mn9)  (- mn9  q9)  (if (> q9  mx9)  (- q9  mx9)  0.0))
+        d10  (if (< q10 mn10) (- mn10 q10) (if (> q10 mx10) (- q10 mx10) 0.0))
+        d11  (if (< q11 mn11) (- mn11 q11) (if (> q11 mx11) (- q11 mx11) 0.0))
+        d12  (if (< q12 mn12) (- mn12 q12) (if (> q12 mx12) (- q12 mx12) 0.0))
+        d13  (if (< q13 mn13) (- mn13 q13) (if (> q13 mx13) (- q13 mx13) 0.0))]
+    (+ (* d0 d0) (* d1 d1) (* d2 d2) (* d3 d3)
+       (* d4 d4) (* d5 d5) (* d6 d6) (* d7 d7)
+       (* d8 d8) (* d9 d9) (* d10 d10) (* d11 d11)
+       (* d12 d12) (* d13 d13))))
 
 (defn- update-worst! [^doubles top-dist ^ints worst ^long k]
   (loop [j 0 max-d Double/NEGATIVE_INFINITY max-pos 0]
@@ -170,7 +276,7 @@
         ^ints cl-ids (.cl-ids s)]
     (loop [c 0]
       (when (< c nlist)
-        (let [d (sq-dist-arr centroids (* c simd-stride) query)]
+        (let [d (sq-dist-arr centroids (* c 14) query)]
           (when (< d (aget cl-dist (aget cl-worst 0)))
             (aset cl-ids (aget cl-worst 0) (int c))
             (aset cl-dist (aget cl-worst 0) d)
