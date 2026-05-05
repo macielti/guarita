@@ -1,6 +1,7 @@
 package guarita;
 
 import jdk.incubator.vector.*;
+import java.nio.ShortBuffer;
 
 public final class SIMDKernel {
 
@@ -70,5 +71,76 @@ public final class SIMDKernel {
             acc = d.fma(d, acc);
         }
         return acc.reduceLanes(VectorOperators.ADD);
+    }
+
+    // Argmax over top-k doubles — updates worst[0] with index of the maximum.
+    private static void updateWorst(double[] topDist, int[] worst, int k) {
+        double maxD = Double.NEGATIVE_INFINITY;
+        int    maxJ = 0;
+        for (int j = 0; j < k; j++) {
+            double d = topDist[j];
+            if (d > maxD) { maxD = d; maxJ = j; }
+        }
+        worst[0] = maxJ;
+    }
+
+    // Public entry point: allocates one short[16] per call, delegates to knnRangeImpl.
+    public static void knnRange(ShortBuffer vectors, float[] query,
+                                int start, int end, int k,
+                                long[] topIdx, double[] topDist, int[] worst) {
+        short[] buf = new short[16];
+        knnRangeImpl(vectors, query, start, end, k, topIdx, topDist, worst, buf);
+    }
+
+    // Inner loop: reuses caller-supplied buf — avoids one allocation per cluster in bboxRepairScan.
+    private static void knnRangeImpl(ShortBuffer vectors, float[] query,
+                                     int start, int end, int k,
+                                     long[] topIdx, double[] topDist, int[] worst,
+                                     short[] buf) {
+        for (int i = start; i < end; i++) {
+            double w = topDist[worst[0]];
+            vectors.get(i * 14, buf, 0, 14);
+            double d = sqDistShorts(buf, query);
+            if (d < w) {
+                int wi = worst[0];
+                topIdx[wi]  = i;
+                topDist[wi] = d;
+                updateWorst(topDist, worst, k);
+            }
+        }
+    }
+
+    // Centroid selection: absorbs topn-clusters! + per-centroid updateWorst call.
+    // c * 16 matches the simd-stride constant in dataset.clj.
+    public static void topkClusters(float[] centroids, float[] query, int nlist, int nprobe,
+                                    int[] clIds, double[] clDist, int[] clWorst) {
+        for (int c = 0; c < nlist; c++) {
+            double d = sqDistCentroids(centroids, c * 16, query);
+            if (d < clDist[clWorst[0]]) {
+                int wi = clWorst[0];
+                clIds[wi]  = c;
+                clDist[wi] = d;
+                updateWorst(clDist, clWorst, nprobe);
+            }
+        }
+    }
+
+    // Bbox repair scan: absorbs the repair loop from knn-ivf-fraud-count.
+    // Allocates one buf for the entire sweep; calls knnRangeImpl per matching cluster.
+    public static void bboxRepairScan(ShortBuffer vectors, float[] query,
+                                      short[] bboxMin, short[] bboxMax,
+                                      int[] offsets, int nlist, int k,
+                                      byte[] visited, long[] topIdx, double[] topDist,
+                                      int[] worst) {
+        short[] buf = new short[16];
+        for (int c = 0; c < nlist; c++) {
+            if (visited[c] != 0) continue;
+            double w  = topDist[worst[0]];
+            float  lb = bboxLowerSq(bboxMin, bboxMax, c * 16, query);
+            if (lb <= w) {
+                knnRangeImpl(vectors, query, offsets[c], offsets[c + 1],
+                             k, topIdx, topDist, worst, buf);
+            }
+        }
     }
 }

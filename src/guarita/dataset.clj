@@ -31,11 +31,6 @@
    (int-array 1 0)
    (byte-array (int (max nlist 1)))))
 
-(def ^:private ^ThreadLocal tl-vec-buf
-  (ThreadLocal/withInitial
-   (reify java.util.function.Supplier
-     (get [_] (short-array 16)))))
-
 ;; Default sized for k≤8, nprobe≤16, nlist≤2048 — covers all current callers without realloc.
 (def ^:private ^ThreadLocal tl-knn-scratch
   (ThreadLocal/withInitial
@@ -138,43 +133,6 @@
   (log/info :stopping ::dataset)
   (doseq [^java.io.Closeable h handles] (.close h)))
 
-(defn- sq-dist-buf [^ShortBuffer vectors ^floats query i _worst]
-  (let [^shorts s (.get tl-vec-buf)
-        _         (.get vectors (int (* (long i) 14)) s 0 14)]
-    (double (SIMDKernel/sqDistShorts s query))))
-
-(defn- sq-dist-arr [^floats centroids c-off ^floats query]
-  (double (SIMDKernel/sqDistCentroids centroids (int (long c-off)) query)))
-
-(defn- bbox-lower-sq [^shorts bbox-min ^shorts bbox-max c ^floats query]
-  (double (SIMDKernel/bboxLowerSq bbox-min bbox-max (int (* (long c) simd-stride)) query)))
-
-(defn- update-worst! [^doubles top-dist ^ints worst ^long k]
-  (loop [j 0 max-d Double/NEGATIVE_INFINITY max-pos 0]
-    (if (< j k)
-      (if (> (aget top-dist j) max-d)
-        (recur (inc j) (aget top-dist j) j)
-        (recur (inc j) max-d max-pos))
-      (aset worst 0 (int max-pos)))))
-
-(defn- topn-clusters! [centroids nlist query nprobe s]
-  (let [^floats centroids centroids
-        ^long nlist nlist
-        ^floats query query
-        ^long nprobe nprobe
-        ^KnnScratch s s
-        ^doubles cl-dist (.cl-dist s)
-        ^ints cl-worst (.cl-worst s)
-        ^ints cl-ids (.cl-ids s)]
-    (loop [c 0]
-      (when (< c nlist)
-        (let [d (sq-dist-arr centroids (* c simd-stride) query)]
-          (when (< d (aget cl-dist (aget cl-worst 0)))
-            (aset cl-ids (aget cl-worst 0) (int c))
-            (aset cl-dist (aget cl-worst 0) d)
-            (update-worst! cl-dist cl-worst nprobe)))
-        (recur (inc c))))))
-
 (defn- sort-cl-ids-by-dist! [^ints cl-ids ^doubles cl-dist ^long nprobe]
   (loop [i 1]
     (when (< i nprobe)
@@ -188,26 +146,6 @@
             (do (aset cl-ids  (inc j) ki)
                 (aset cl-dist (inc j) kd)))))
       (recur (inc i)))))
-
-(defn- knn-range! [vectors query k start end s]
-  (let [^ShortBuffer vectors vectors
-        ^floats query query
-        ^long k k
-        ^long start start
-        ^long end end
-        ^KnnScratch s s
-        ^longs top-idx (.top-idx s)
-        ^doubles top-dist (.top-dist s)
-        ^ints worst (.worst s)]
-    (loop [i start]
-      (when (< i end)
-        (let [w (aget top-dist (aget worst 0))
-              d (sq-dist-buf vectors query i w)]
-          (when (< d w)
-            (aset top-idx (aget worst 0) (long i))
-            (aset top-dist (aget worst 0) d)
-            (update-worst! top-dist worst k)))
-        (recur (inc i))))))
 
 (defn- finalize-results
   [^ByteBuffer labels ^longs top-idx ^doubles top-dist ^long k]
@@ -230,7 +168,8 @@
   "Sequential brute force over all n vectors. Returns k nearest neighbors."
   [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^long n]} ^floats query ^long k]
   (let [^KnnScratch s (acquire-scratch! k 16 1)]
-    (knn-range! vectors query k 0 n s)
+    (SIMDKernel/knnRange vectors query (int 0) (int n) (int k)
+                         (.top-idx s) (.top-dist s) (.worst s))
     (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
 
 (defn knn-ivf
@@ -240,13 +179,16 @@
   [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
   (let [^KnnScratch s (acquire-scratch! k nprobe 1)]
-    (topn-clusters! centroids nlist query nprobe s)
+    (SIMDKernel/topkClusters centroids query (int nlist) (int nprobe)
+                             (.cl-ids s) (.cl-dist s) (.cl-worst s))
     (loop [ci 0]
       (when (< ci nprobe)
         (let [cid (aget ^ints (.cl-ids s) ci)]
           (when (>= cid 0)
-            (knn-range! vectors query k
-                        (aget offsets cid) (aget offsets (inc cid)) s)))
+            (SIMDKernel/knnRange vectors query
+                                 (aget offsets cid) (aget offsets (inc cid))
+                                 (int k)
+                                 (.top-idx s) (.top-dist s) (.worst s))))
         (recur (inc ci))))
     (vec (finalize-results labels (.top-idx s) (.top-dist s) k))))
 
@@ -279,7 +221,8 @@
         ^ints cl-ids   (.cl-ids s)
         ^ints offsets  offsets
         ^bytes visited (.visited s)]
-    (topn-clusters! centroids nlist query nprobe-fast s)
+    (SIMDKernel/topkClusters centroids query (int nlist) (int nprobe-fast)
+                             cl-ids (.cl-dist s) (.cl-worst s))
     (sort-cl-ids-by-dist! cl-ids (.cl-dist s) nprobe-fast)
     ;; Fast probe: scan top-nprobe-fast clusters, mark visited
     (loop [ci 0]
@@ -287,24 +230,19 @@
         (let [cid (aget cl-ids ci)]
           (when (>= cid 0)
             (aset visited cid (byte 1))
-            (knn-range! vectors query k
-                        (aget offsets cid) (aget offsets (inc cid)) s)))
+            (SIMDKernel/knnRange vectors query
+                                 (aget offsets cid) (aget offsets (inc cid))
+                                 (int k)
+                                 (.top-idx s) (.top-dist s) (.worst s))))
         (recur (inc ci))))
     (let [fast-count (count-fraud labels (.top-idx s) (.top-dist s) k)]
       ;; Bbox repair only for borderline queries where one extra neighbor
       ;; could flip the approve/deny decision
       (if (or (= fast-count (dec threshold)) (= fast-count threshold))
-        (let [^doubles top-dist (.top-dist s)
-              ^ints worst       (.worst s)]
-          (loop [c 0]
-            (when (< c nlist)
-              (when (zero? (aget visited c))
-                (let [w  (aget top-dist (aget worst 0))
-                      lb (bbox-lower-sq bbox-min bbox-max c query)]
-                  (when (<= lb w)
-                    (knn-range! vectors query k
-                                (aget offsets c) (aget offsets (inc c)) s))))
-              (recur (inc c))))
+        (do
+          (SIMDKernel/bboxRepairScan vectors query bbox-min bbox-max
+                                     offsets (int nlist) (int k)
+                                     visited (.top-idx s) (.top-dist s) (.worst s))
           (count-fraud labels (.top-idx s) (.top-dist s) k))
         fast-count))))
 
@@ -314,13 +252,16 @@
   [{:keys [^ByteBuffer labels ^ShortBuffer vectors ^floats centroids ^ints offsets ^long nlist]}
    ^floats query ^long k ^long nprobe]
   (let [^KnnScratch s (acquire-scratch! k nprobe 1)]
-    (topn-clusters! centroids nlist query nprobe s)
+    (SIMDKernel/topkClusters centroids query (int nlist) (int nprobe)
+                             (.cl-ids s) (.cl-dist s) (.cl-worst s))
     (loop [ci 0]
       (when (< ci nprobe)
         (let [cid (aget ^ints (.cl-ids s) ci)]
           (when (>= cid 0)
-            (knn-range! vectors query k
-                        (aget offsets cid) (aget offsets (inc cid)) s)))
+            (SIMDKernel/knnRange vectors query
+                                 (aget offsets cid) (aget offsets (inc cid))
+                                 (int k)
+                                 (.top-idx s) (.top-dist s) (.worst s))))
         (recur (inc ci))))
     (let [^longs top-idx   (.top-idx s)
           ^doubles top-dist (.top-dist s)]
