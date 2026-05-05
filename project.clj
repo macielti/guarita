@@ -60,7 +60,7 @@
                                                     "--no-fallback"
                                                     "--enable-url-protocols=http,https"
                                                     "-O3"
-                                                    "-march=native"
+                                                    "-march=x86-64-v3"
                                                     "--add-modules=jdk.incubator.vector"
                                                     "--initialize-at-build-time"
                                                     "--initialize-at-run-time=io.prometheus.client.Striped64"
