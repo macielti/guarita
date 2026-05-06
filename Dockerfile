@@ -1,4 +1,4 @@
-FROM container-registry.oracle.com/graalvm/native-image:23 AS build
+FROM container-registry.oracle.com/graalvm/native-image:25 AS build
 
 RUN curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
     chmod +x lein && \
